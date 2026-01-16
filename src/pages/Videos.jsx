@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import muscles from '../data/muscles'
 import videos from '../data/videos'
 
@@ -56,7 +57,10 @@ function getYouTubeId(url) {
 
 const thumbFor = (id) => `https://img.youtube.com/vi/${id}/hqdefault.jpg`
 
-export default function Videos({ targetExercise }) {
+export default function Videos() {
+  const [searchParams] = useSearchParams()
+  const targetExercise = searchParams.get('exercise')
+  
   const [playing, setPlaying] = useState(null) // youtube id currently playing
 
   // normalized lookup maps for case-insensitive matching
