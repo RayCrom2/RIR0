@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const STORAGE_KEY = 'nutrition_log';
 const DATE_KEY = 'nutrition_date';
 const CARD_ORDER_KEY = 'nutrition_card_order';
+const VISIBLE_KEY = 'nutrition_visible_macros';
 
 const EMPTY_FORM = { name: '', calories: '', protein: '', fat: '', carbs: '', fiber: '', sugar: '' };
 
@@ -32,8 +33,43 @@ export default function Nutrition() {
   });
   const [dragIndex, setDragIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [visibleMacros, setVisibleMacros] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(VISIBLE_KEY));
+      if (Array.isArray(saved)) return new Set(saved);
+    } catch {}
+    return new Set(MACROS.map(m => m.key));
+  });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const orderedMacros = cardOrder.map(key => MACROS.find(m => m.key === key));
+  const visibleOrderedMacros = orderedMacros.filter(m => visibleMacros.has(m.key));
+  const visibleMacroList = MACROS.filter(m => visibleMacros.has(m.key));
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function toggleMacro(key) {
+    setVisibleMacros(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size === 1) return prev; // always keep at least one visible
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      localStorage.setItem(VISIBLE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
 
   function handleDragStart(i) {
     setDragIndex(i);
@@ -129,8 +165,43 @@ export default function Nutrition() {
       <p style={{ color: '#888', marginBottom: 20, fontSize: 14 }}>{today} — entries reset each day</p>
 
       {/* Daily Summary Cards */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
-        {orderedMacros.map((m, i) => (
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Totals</span>
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#aaa', padding: '2px 6px', borderRadius: 6, lineHeight: 1 }}
+              title="Show/hide macros"
+            >⋯</button>
+            {menuOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: '110%', zIndex: 100,
+                background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                padding: '8px 0', minWidth: 160,
+              }}>
+                <p style={{ margin: '0 0 4px', padding: '4px 14px', fontSize: 11, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Show macros</p>
+                {MACROS.map(m => (
+                  <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 14 }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f7f7fb'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleMacros.has(m.key)}
+                      onChange={() => toggleMacro(m.key)}
+                      style={{ accentColor: m.color, width: 15, height: 15, cursor: 'pointer' }}
+                    />
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleOrderedMacros.length}, 1fr)`, gap: 12 }}>
+        {visibleOrderedMacros.map((m, i) => (
           <div
             key={m.key}
             draggable
@@ -139,8 +210,6 @@ export default function Nutrition() {
             onDrop={() => handleDrop(i)}
             onDragEnd={handleDragEnd}
             style={{
-              flex: '1 1 50px',
-              maxWidth: '100px',
               background: '#fff',
               borderRadius: 10,
               padding: '14px 18px',
@@ -162,6 +231,7 @@ export default function Nutrition() {
             <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{m.label}</div>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Entry Form */}
@@ -266,7 +336,7 @@ export default function Nutrition() {
               <thead>
                 <tr style={{ background: '#fafafa' }}>
                   <th style={thStyle({ textAlign: 'left' })}>Food</th>
-                  {MACROS.map(m => (
+                  {visibleMacroList.map(m => (
                     <th key={m.key} style={thStyle()}>{m.label}<br /><span style={{ fontWeight: 400, color: '#aaa', fontSize: 11 }}>{m.unit}</span></th>
                   ))}
                   <th style={thStyle()}></th>
@@ -276,7 +346,7 @@ export default function Nutrition() {
                 {entries.map((entry, i) => (
                   <tr key={entry.id} style={{ borderTop: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
                     <td style={{ padding: '10px 16px', fontWeight: 500 }}>{entry.name}</td>
-                    {MACROS.map(m => (
+                    {visibleMacroList.map(m => (
                       <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', color: m.key === 'calories' ? '#ff8c42' : '#333', fontWeight: m.key === 'calories' ? 600 : 400 }}>
                         {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: '#ddd' }}>—</span>}
                       </td>
@@ -293,7 +363,7 @@ export default function Nutrition() {
               <tfoot>
                 <tr style={{ borderTop: '2px solid #eee', background: '#fff8f3' }}>
                   <td style={{ padding: '10px 16px', fontWeight: 700, color: '#555' }}>Total</td>
-                  {MACROS.map(m => (
+                  {visibleMacroList.map(m => (
                     <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: m.color }}>
                       {m.key === 'calories' ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
                     </td>
