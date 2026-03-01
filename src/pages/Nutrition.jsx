@@ -1,0 +1,335 @@
+import { useState, useEffect } from 'react';
+
+const STORAGE_KEY = 'nutrition_log';
+const DATE_KEY = 'nutrition_date';
+const CARD_ORDER_KEY = 'nutrition_card_order';
+
+const EMPTY_FORM = { name: '', calories: '', protein: '', fat: '', carbs: '', fiber: '', sugar: '' };
+
+const MACROS = [
+  { key: 'calories', label: 'Calories',  unit: 'kcal', color: '#ff8c42' },
+  { key: 'protein',  label: 'Protein',   unit: 'g',    color: '#4f8ef7' },
+  { key: 'carbs',    label: 'Carbs',     unit: 'g',    color: '#f7c948' },
+  { key: 'fat',      label: 'Fat',       unit: 'g',    color: '#e05c5c' },
+  { key: 'fiber',    label: 'Fiber',     unit: 'g',    color: '#5cb85c' },
+  { key: 'sugar',    label: 'Sugar',     unit: 'g',    color: '#c87dd4' },
+];
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default function Nutrition() {
+  const [entries, setEntries] = useState([]);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [error, setError] = useState('');
+  const [cardOrder, setCardOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CARD_ORDER_KEY));
+      if (Array.isArray(saved) && saved.length === MACROS.length) return saved;
+    } catch {}
+    return MACROS.map(m => m.key);
+  });
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  const orderedMacros = cardOrder.map(key => MACROS.find(m => m.key === key));
+
+  function handleDragStart(i) {
+    setDragIndex(i);
+  }
+
+  function handleDragOver(e, i) {
+    e.preventDefault();
+    if (i !== dragOverIndex) setDragOverIndex(i);
+  }
+
+  function handleDrop(i) {
+    if (dragIndex === null || dragIndex === i) return;
+    const next = [...cardOrder];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(i, 0, moved);
+    setCardOrder(next);
+    localStorage.setItem(CARD_ORDER_KEY, JSON.stringify(next));
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
+  // Load entries, reset if it's a new day
+  useEffect(() => {
+    const savedDate = localStorage.getItem(DATE_KEY);
+    const today = todayStr();
+    if (savedDate !== today) {
+      localStorage.setItem(DATE_KEY, today);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      setEntries([]);
+    } else {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        setEntries(saved);
+      } catch {
+        setEntries([]);
+      }
+    }
+  }, []);
+
+  function persist(next) {
+    setEntries(next);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  }
+
+  function handleChange(e) {
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+    setError('');
+  }
+
+  function handleAdd(e) {
+    e.preventDefault();
+    if (!form.name.trim()) { setError('Food name is required.'); return; }
+    if (!form.calories || isNaN(Number(form.calories)) || Number(form.calories) < 0) {
+      setError('Enter a valid calorie amount.'); return;
+    }
+    const entry = {
+      id: Date.now(),
+      name: form.name.trim(),
+      calories: Number(form.calories) || 0,
+      protein:  Number(form.protein)  || 0,
+      fat:      Number(form.fat)      || 0,
+      carbs:    Number(form.carbs)    || 0,
+      fiber:    Number(form.fiber)    || 0,
+      sugar:    Number(form.sugar)    || 0,
+    };
+    persist([...entries, entry]);
+    setForm(EMPTY_FORM);
+  }
+
+  function handleDelete(id) {
+    persist(entries.filter(e => e.id !== id));
+  }
+
+  function handleClearAll() {
+    if (window.confirm('Clear all entries for today?')) persist([]);
+  }
+
+  const totals = MACROS.reduce((acc, m) => {
+    acc[m.key] = entries.reduce((sum, e) => sum + (e[m.key] || 0), 0);
+    return acc;
+  }, {});
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  return (
+    <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 8px' }}>
+      <h2 style={{ marginBottom: 4 }}>Nutrition Tracker</h2>
+      <p style={{ color: '#888', marginBottom: 20, fontSize: 14 }}>{today} — entries reset each day</p>
+
+      {/* Daily Summary Cards */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        {orderedMacros.map((m, i) => (
+          <div
+            key={m.key}
+            draggable
+            onDragStart={() => handleDragStart(i)}
+            onDragOver={e => handleDragOver(e, i)}
+            onDrop={() => handleDrop(i)}
+            onDragEnd={handleDragEnd}
+            style={{
+              flex: '1 1 50px',
+              maxWidth: '100px',
+              background: '#fff',
+              borderRadius: 10,
+              padding: '14px 18px',
+              boxShadow: dragOverIndex === i && dragIndex !== i
+                ? `0 0 0 2px ${m.color}`
+                : '0 4px 14px rgba(0,0,0,0.07)',
+              borderTop: `4px solid ${m.color}`,
+              textAlign: 'center',
+              cursor: 'grab',
+              opacity: dragIndex === i ? 0.4 : 1,
+              transition: 'opacity 0.15s, box-shadow 0.15s',
+              userSelect: 'none',
+            }}
+          >
+            <div style={{ fontSize: 22, fontWeight: 700, color: m.color }}>
+              {totals[m.key].toFixed(m.key === 'calories' ? 0 : 1)}
+            </div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{m.unit}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Entry Form */}
+      <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 4px 14px rgba(0,0,0,0.07)', marginBottom: 24 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 16 }}>Add Food</h3>
+        <form onSubmit={handleAdd}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <input
+              name="name"
+              placeholder="Food name *"
+              value={form.name}
+              onChange={handleChange}
+              style={inputStyle({ flex: '2 1 180px' })}
+            />
+            <input
+              name="calories"
+              type="number"
+              min="0"
+              placeholder="Calories *"
+              value={form.calories}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 100px' })}
+            />
+            <input
+              name="protein"
+              type="number"
+              min="0"
+              placeholder="Protein (g)"
+              value={form.protein}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 100px' })}
+            />
+            <input
+              name="carbs"
+              type="number"
+              min="0"
+              placeholder="Carbs (g)"
+              value={form.carbs}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 100px' })}
+            />
+            <input
+              name="fat"
+              type="number"
+              min="0"
+              placeholder="Fat (g)"
+              value={form.fat}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 100px' })}
+            />
+            <input
+              name="fiber"
+              type="number"
+              min="0"
+              placeholder="Fiber (g)"
+              value={form.fiber}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 90px' })}
+            />
+            <input
+              name="sugar"
+              type="number"
+              min="0"
+              placeholder="Sugar (g)"
+              value={form.sugar}
+              onChange={handleChange}
+              style={inputStyle({ flex: '1 1 90px' })}
+            />
+          </div>
+          {error && <p style={{ color: '#e05c5c', margin: '0 0 10px', fontSize: 13 }}>{error}</p>}
+          <button type="submit" style={{
+            background: '#ff8c42', color: '#fff', border: 'none',
+            borderRadius: 8, padding: '9px 22px', fontWeight: 600,
+            cursor: 'pointer', fontSize: 14,
+          }}>
+            + Add Entry
+          </button>
+        </form>
+      </div>
+
+      {/* Log Table */}
+      <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 4px 14px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>Today's Log ({entries.length} {entries.length === 1 ? 'item' : 'items'})</h3>
+          {entries.length > 0 && (
+            <button onClick={handleClearAll} style={{
+              background: 'none', border: '1px solid #ddd', borderRadius: 6,
+              padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: '#888',
+            }}>
+              Clear All
+            </button>
+          )}
+        </div>
+
+        {entries.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#bbb', padding: '32px 0', margin: 0 }}>
+            No foods logged yet — add your first entry above.
+          </p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ background: '#fafafa' }}>
+                  <th style={thStyle({ textAlign: 'left' })}>Food</th>
+                  {MACROS.map(m => (
+                    <th key={m.key} style={thStyle()}>{m.label}<br /><span style={{ fontWeight: 400, color: '#aaa', fontSize: 11 }}>{m.unit}</span></th>
+                  ))}
+                  <th style={thStyle()}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, i) => (
+                  <tr key={entry.id} style={{ borderTop: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    <td style={{ padding: '10px 16px', fontWeight: 500 }}>{entry.name}</td>
+                    {MACROS.map(m => (
+                      <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', color: m.key === 'calories' ? '#ff8c42' : '#333', fontWeight: m.key === 'calories' ? 600 : 400 }}>
+                        {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: '#ddd' }}>—</span>}
+                      </td>
+                    ))}
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                      <button onClick={() => handleDelete(entry.id)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#ccc', fontSize: 16, lineHeight: 1, padding: 4,
+                      }} title="Remove">✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: '2px solid #eee', background: '#fff8f3' }}>
+                  <td style={{ padding: '10px 16px', fontWeight: 700, color: '#555' }}>Total</td>
+                  {MACROS.map(m => (
+                    <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: m.color }}>
+                      {m.key === 'calories' ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function inputStyle(extra = {}) {
+  return {
+    padding: '9px 12px',
+    border: '1px solid #e0e0e0',
+    borderRadius: 8,
+    fontSize: 14,
+    outline: 'none',
+    background: '#fafafa',
+    minWidth: 0,
+    ...extra,
+  };
+}
+
+function thStyle(extra = {}) {
+  return {
+    padding: '10px 16px',
+    fontWeight: 600,
+    fontSize: 13,
+    color: '#555',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    ...extra,
+  };
+}

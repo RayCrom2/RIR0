@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import DiagramPage from './pages/DiagramPage'
 import Videos from './pages/Videos'
+import Nutrition from './pages/Nutrition'
 
 export default function App() {
   return (
@@ -19,7 +20,7 @@ export default function App() {
         <Route path="/" element={<div><h2>Welcome to AIOFitness</h2><p>Select a page from the navigation above.</p></div>} />
         <Route path="/diagram" element={<DiagramPage />} />
         <Route path="/videos" element={<Videos />} />
-        <Route path="/nutrition" element={<div><h2>Nutrition Page</h2></div>} />
+        <Route path="/nutrition" element={<Nutrition />} />
         <Route path="/workouts" element={<div><h2>Workouts Page</h2></div>} />
       </Routes>
     </div>
