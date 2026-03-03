@@ -4,6 +4,7 @@ const STORAGE_KEY = 'nutrition_log';
 const DATE_KEY = 'nutrition_date';
 const CARD_ORDER_KEY = 'nutrition_card_order';
 const VISIBLE_KEY = 'nutrition_visible_macros';
+const MY_FOODS_KEY = 'nutrition_my_foods';
 
 const EMPTY_FORM = { name: '', calories: '', protein: '', fat: '', carbs: '', fiber: '', sugar: '' };
 
@@ -23,6 +24,11 @@ function todayStr() {
 export default function Nutrition() {
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [saveToMyFoods, setSaveToMyFoods] = useState(false);
+  const [savedFoods, setSavedFoods] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(MY_FOODS_KEY) || '[]'); } catch { return []; }
+  });
+  const [myFoodsOpen, setMyFoodsOpen] = useState(false);
   const [error, setError] = useState('');
   const [cardOrder, setCardOrder] = useState(() => {
     try {
@@ -130,8 +136,10 @@ export default function Nutrition() {
     if (!form.calories || isNaN(Number(form.calories)) || Number(form.calories) < 0) {
       setError('Enter a valid calorie amount.'); return;
     }
+    const now = new Date();
     const entry = {
       id: Date.now(),
+      time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
       name: form.name.trim(),
       calories: Number(form.calories) || 0,
       protein:  Number(form.protein)  || 0,
@@ -141,6 +149,16 @@ export default function Nutrition() {
       sugar:    Number(form.sugar)    || 0,
     };
     persist([...entries, entry]);
+    if (saveToMyFoods) {
+      const { id: _id, ...food } = entry;
+      const already = savedFoods.some(f => f.name.toLowerCase() === food.name.toLowerCase());
+      if (!already) {
+        const next = [...savedFoods, food];
+        setSavedFoods(next);
+        localStorage.setItem(MY_FOODS_KEY, JSON.stringify(next));
+      }
+    }
+    setSaveToMyFoods(false);
     setForm(EMPTY_FORM);
   }
 
@@ -150,6 +168,22 @@ export default function Nutrition() {
 
   function handleClearAll() {
     if (window.confirm('Clear all entries for today?')) persist([]);
+  }
+
+  function handleAddFromLibrary(food) {
+    const now = new Date();
+    const entry = {
+      ...food,
+      id: Date.now(),
+      time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+    };
+    persist([...entries, entry]);
+  }
+
+  function handleDeleteSaved(name) {
+    const next = savedFoods.filter(f => f.name !== name);
+    setSavedFoods(next);
+    localStorage.setItem(MY_FOODS_KEY, JSON.stringify(next));
   }
 
   const totals = MACROS.reduce((acc, m) => {
@@ -302,14 +336,85 @@ export default function Nutrition() {
             />
           </div>
           {error && <p style={{ color: '#e05c5c', margin: '0 0 10px', fontSize: 13 }}>{error}</p>}
-          <button type="submit" style={{
-            background: '#ff8c42', color: '#fff', border: 'none',
-            borderRadius: 8, padding: '9px 22px', fontWeight: 600,
-            cursor: 'pointer', fontSize: 14,
-          }}>
-            + Add Entry
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <button type="submit" style={{
+              background: '#ff8c42', color: '#fff', border: 'none',
+              borderRadius: 8, padding: '9px 22px', fontWeight: 600,
+              cursor: 'pointer', fontSize: 14,
+            }}>
+              + Add Entry
+            </button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#666', cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={saveToMyFoods}
+                onChange={e => setSaveToMyFoods(e.target.checked)}
+                style={{ accentColor: '#ff8c42', width: 15, height: 15, cursor: 'pointer' }}
+              />
+              Save to My Foods
+            </label>
+          </div>
         </form>
+      </div>
+
+      {/* My Foods Library */}
+      <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 4px 14px rgba(0,0,0,0.07)', marginBottom: 24, overflow: 'hidden' }}>
+        <button
+          onClick={() => setMyFoodsOpen(o => !o)}
+          style={{
+            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '14px 20px', fontSize: 15, fontWeight: 600, color: '#333',
+          }}
+        >
+          <span>My Foods <span style={{ fontSize: 12, fontWeight: 400, color: '#aaa', marginLeft: 6 }}>{savedFoods.length} saved</span></span>
+          <span style={{ fontSize: 12, color: '#aaa' }}>{myFoodsOpen ? '▲' : '▼'}</span>
+        </button>
+        {myFoodsOpen && (
+          savedFoods.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#bbb', padding: '20px 0', margin: 0, fontSize: 14 }}>
+              No saved foods yet — check "Save to My Foods" when adding an entry.
+            </p>
+          ) : (
+            <div style={{ padding: '0 16px 16px' }}>
+              {savedFoods.map(food => (
+                <div key={food.name} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '9px 10px', borderRadius: 8, marginBottom: 6,
+                  background: '#fafafa', border: '1px solid #f0f0f0',
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{food.name}</span>
+                    <span style={{ fontSize: 12, color: '#aaa', marginLeft: 10 }}>
+                      {food.calories} kcal
+                      {food.protein > 0 && ` · ${food.protein}g protein`}
+                      {food.carbs > 0 && ` · ${food.carbs}g carbs`}
+                      {food.fat > 0 && ` · ${food.fat}g fat`}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      onClick={() => handleAddFromLibrary(food)}
+                      style={{
+                        background: '#ff8c42', color: '#fff', border: 'none',
+                        borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
+                        fontSize: 12, fontWeight: 600,
+                      }}
+                    >+ Add</button>
+                    <button
+                      onClick={() => handleDeleteSaved(food.name)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#ccc', fontSize: 16, lineHeight: 1, padding: '4px 6px',
+                      }}
+                      title="Remove from My Foods"
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
       </div>
 
       {/* Log Table */}
@@ -339,6 +444,7 @@ export default function Nutrition() {
                   {visibleMacroList.map(m => (
                     <th key={m.key} style={thStyle()}>{m.label}<br /><span style={{ fontWeight: 400, color: '#aaa', fontSize: 11 }}>{m.unit}</span></th>
                   ))}
+                  <th style={thStyle({ color: '#aaa' })}>Time</th>
                   <th style={thStyle()}></th>
                 </tr>
               </thead>
@@ -351,6 +457,9 @@ export default function Nutrition() {
                         {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: '#ddd' }}>—</span>}
                       </td>
                     ))}
+                    <td style={{ padding: '10px 16px', textAlign: 'center', color: '#aaa', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {entry.time || '—'}
+                    </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <button onClick={() => handleDelete(entry.id)} style={{
                         background: 'none', border: 'none', cursor: 'pointer',
@@ -368,6 +477,7 @@ export default function Nutrition() {
                       {m.key === 'calories' ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
                     </td>
                   ))}
+                  <td />
                   <td />
                 </tr>
               </tfoot>

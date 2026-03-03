@@ -12,7 +12,7 @@ export default function App() {
         <NavLink to="/diagram">Muscle Diagram</NavLink>
         <NavLink to="/videos">Videos</NavLink>
         <NavLink to="/nutrition">Nutrition</NavLink>
-        <NavLink to="/workouts">Workouts</NavLink>
+        <NavLink to="/exerciselogger">Exercise Logger</NavLink>
       </nav>
       <h1>AIOFitness</h1>
 
@@ -21,7 +21,7 @@ export default function App() {
         <Route path="/diagram" element={<DiagramPage />} />
         <Route path="/videos" element={<Videos />} />
         <Route path="/nutrition" element={<Nutrition />} />
-        <Route path="/workouts" element={<div><h2>Workouts Page</h2></div>} />
+        <Route path="/exerciselogger" element={<div><h2>Exercise Logger Page</h2></div>} />
       </Routes>
     </div>
   )
