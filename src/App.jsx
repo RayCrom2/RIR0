@@ -3,6 +3,7 @@ import { Routes, Route, NavLink } from 'react-router-dom'
 import DiagramPage from './pages/DiagramPage'
 import Videos from './pages/Videos'
 import Nutrition from './pages/Nutrition'
+import ExerciseLogger from './pages/ExerciseLogger'
 
 export default function App() {
   return (
@@ -21,7 +22,7 @@ export default function App() {
         <Route path="/diagram" element={<DiagramPage />} />
         <Route path="/videos" element={<Videos />} />
         <Route path="/nutrition" element={<Nutrition />} />
-        <Route path="/exerciselogger" element={<div><h2>Exercise Logger Page</h2></div>} />
+        <Route path="/exerciselogger" element={<ExerciseLogger />} />
       </Routes>
     </div>
   )
