@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import muscles from '../data/muscles'
 import videos from '../data/videos'
+import '../pages-css/Videos.css'
 
 const slugify = (s) =>
   String(s)
@@ -60,7 +61,7 @@ const thumbFor = (id) => `https://img.youtube.com/vi/${id}/hqdefault.jpg`
 export default function Videos() {
   const [searchParams] = useSearchParams()
   const targetExercise = searchParams.get('exercise')
-  
+
   const [playing, setPlaying] = useState(null) // youtube id currently playing
 
   // normalized lookup maps for case-insensitive matching
@@ -99,18 +100,10 @@ export default function Videos() {
   }, [targetExercise])
 
   return (
-    <div style={{ padding: 16 }}>
+    <div className="videos-page">
       <h2>Exercise Videos</h2>
-      
-      <div
-        ref={listRef}
-        style={{
-          display: 'grid',
-          gap: 12,
-          marginTop: 12,
-          gridTemplateColumns: 'repeat(2, 1fr)',
-        }}
-      >
+
+      <div ref={listRef} className="videos-grid">
         {exercises.map((ex) => {
           const id = slugify(ex)
           const key = ex?.toString?.().toLowerCase().trim()
@@ -121,72 +114,37 @@ export default function Videos() {
           const yt = getYouTubeId(url)
           const thumb = yt ? thumbFor(yt) : null
           return (
-            <div
-              id={id}
-              key={id}
-              style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}
-            >
-              <h3 style={{ margin: '0 0 8px 0' }}>{ex}</h3>
+            <div id={id} key={id} className="video-card">
+              <h3>{ex}</h3>
 
               {yt ? (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ width: '100%' }}>
+                <div className="video-wrapper">
+                  <div className="video-inner">
                     {playing === yt ? (
-                      <div style={{ position: 'relative', paddingTop: '56.25%' }}>
+                      <div className="video-embed">
                         <iframe
                           title={ex}
                           src={`https://www.youtube.com/embed/${yt}?autoplay=1&rel=0`}
                           frameBorder="0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                          }}
+                          className="video-iframe"
                         />
                       </div>
                     ) : (
                       <button
                         onClick={() => setPlaying(yt)}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          padding: 0,
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                        }}
+                        className="video-thumb-btn"
                         aria-label={`Play ${ex}`}
                       >
-                        <div style={{ position: 'relative' }}>
+                        <div className="video-thumb-container">
                           <img
                             src={thumb}
                             alt={`${ex} thumbnail`}
-                            style={{ width: '100%', display: 'block', borderRadius: 6 }}
+                            className="video-thumb-img"
                           />
-                          <div
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 64,
-                                height: 64,
-                                borderRadius: 32,
-                                background: 'rgba(0,0,0,0.6)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                            >
+                          <div className="video-play-overlay">
+                            <div className="video-play-circle">
                               <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M8 5v14l11-7z" />
                               </svg>
@@ -196,7 +154,6 @@ export default function Videos() {
                       </button>
                     )}
                   </div>
-                  
                 </div>
               ) : (
                 <em>No video available</em>
