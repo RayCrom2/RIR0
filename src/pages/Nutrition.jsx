@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import '../pages-css/Nutrition.css';
 
 const STORAGE_KEY = 'nutrition_log';
 const DATE_KEY = 'nutrition_date';
@@ -349,39 +350,33 @@ export default function Nutrition() {
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 8px' }}>
+    <div className="nutrition-page">
       <h2 style={{ marginBottom: 4 }}>Nutrition Tracker</h2>
-      <p style={{ color: '#888', marginBottom: 20, fontSize: 14 }}>{today} — entries reset each day</p>
+      <p className="nutrition-subtitle">{today} — entries reset each day</p>
 
       {/* Daily Summary Cards */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Totals</span>
-          <div ref={menuRef} style={{ position: 'relative' }}>
+      <div className="summary-section">
+        <div className="summary-top">
+          <span className="summary-section-label">Daily Totals</span>
+          <div ref={menuRef} className="macro-menu-wrapper">
             <button
               onClick={() => setMenuOpen(o => !o)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#aaa', padding: '2px 6px', borderRadius: 6, lineHeight: 1 }}
+              className="macro-menu-btn"
               title="Show/hide macros"
             >⋯</button>
             {menuOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: '110%', zIndex: 100,
-                background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                padding: '8px 0', minWidth: 160,
-              }}>
-                <p style={{ margin: '0 0 4px', padding: '4px 14px', fontSize: 11, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Show macros</p>
+              <div className="macro-menu-dropdown">
+                <p className="macro-menu-title">Show macros</p>
                 {MACROS.map(m => (
-                  <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', cursor: 'pointer', fontSize: 14 }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f7f7fb'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                  >
+                  <label key={m.key} className="macro-menu-item">
                     <input
                       type="checkbox"
                       checked={visibleMacros.has(m.key)}
                       onChange={() => toggleMacro(m.key)}
-                      style={{ accentColor: m.color, width: 15, height: 15, cursor: 'pointer' }}
+                      className="nutrition-input macro-checkbox"
+                      style={{ accentColor: m.color }}
                     />
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
+                    <span className="macro-color-dot" style={{ background: m.color }} />
                     {m.label}
                   </label>
                 ))}
@@ -389,83 +384,65 @@ export default function Nutrition() {
             )}
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${visibleOrderedMacros.length}, 1fr)`, gap: 12 }}>
-        {visibleOrderedMacros.map((m, i) => (
-          <div
-            key={m.key}
-            draggable
-            onDragStart={() => handleDragStart(i)}
-            onDragOver={e => handleDragOver(e, i)}
-            onDrop={() => handleDrop(i)}
-            onDragEnd={handleDragEnd}
-            style={{
-              background: '#fff',
-              borderRadius: 10,
-              padding: '14px 18px',
-              boxShadow: dragOverIndex === i && dragIndex !== i
-                ? `0 0 0 2px ${m.color}`
-                : '0 4px 14px rgba(0,0,0,0.07)',
-              borderTop: `4px solid ${m.color}`,
-              textAlign: 'center',
-              cursor: 'grab',
-              opacity: dragIndex === i ? 0.4 : 1,
-              transition: 'opacity 0.15s, box-shadow 0.15s',
-              userSelect: 'none',
-            }}
-          >
-            <div style={{ fontSize: 22, fontWeight: 700, color: m.color }}>
-              {totals[m.key].toFixed(m.key === 'calories' ? 0 : 1)}
+        <div
+          className="macro-cards-grid"
+          style={{ gridTemplateColumns: `repeat(${visibleOrderedMacros.length}, 1fr)` }}
+        >
+          {visibleOrderedMacros.map((m, i) => (
+            <div
+              key={m.key}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={e => handleDragOver(e, i)}
+              onDrop={() => handleDrop(i)}
+              onDragEnd={handleDragEnd}
+              className={`macro-card${dragIndex === i ? ' dragging' : ''}`}
+              style={{
+                borderTop: `4px solid ${m.color}`,
+                boxShadow: dragOverIndex === i && dragIndex !== i
+                  ? `0 0 0 2px ${m.color}`
+                  : '0 4px 14px rgba(0,0,0,0.07)',
+              }}
+            >
+              <div className="macro-card-value" style={{ color: m.color }}>
+                {totals[m.key].toFixed(m.key === 'calories' ? 0 : 1)}
+              </div>
+              <div className="macro-card-unit">{m.unit}</div>
+              <div className="macro-card-label">{m.label}</div>
             </div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{m.unit}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{m.label}</div>
-          </div>
-        ))}
+          ))}
         </div>
       </div>
 
       {/* Entry Form */}
-      <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', boxShadow: '0 4px 14px rgba(0,0,0,0.07)', marginBottom: 24 }}>
-        <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 16 }}>Add Food</h3>
+      <div className="entry-form-card">
+        <h3>Add Food</h3>
         <form onSubmit={handleAdd}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-            <div ref={searchRef} style={{ flex: '2 1 180px', position: 'relative' }}>
+          <div className="form-inputs-row">
+            <div ref={searchRef} className="food-search-wrapper">
               <input
                 name="name"
                 placeholder="Food name *"
                 value={form.name}
                 onChange={handleChange}
                 onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
-                style={inputStyle({ width: '100%', boxSizing: 'border-box' })}
+                className="nutrition-input full-width"
                 autoComplete="off"
               />
               {searchLoading && (
-                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#aaa' }}>
-                  searching…
-                </span>
+                <span className="search-loading-indicator">searching…</span>
               )}
               {showDropdown && (
-                <div style={{
-                  position: 'absolute', top: '110%', left: 0, right: 0, zIndex: 200,
-                  background: '#fff', borderRadius: 10,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
-                  border: '1px solid #e8e8e8',
-                  maxHeight: 320, overflowY: 'auto',
-                }}>
+                <div className="food-search-dropdown">
                   {searchResults.map(food => (
                     <button
                       key={food.fdcId}
                       type="button"
                       onClick={() => handleSelectFood(food)}
-                      style={{
-                        display: 'block', width: '100%', textAlign: 'left',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '10px 14px', borderBottom: '1px solid #f0f0f0',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#fff8f3'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      className="food-search-result"
                     >
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{food.name}</div>
-                      <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                      <div className="food-result-name">{food.name}</div>
+                      <div className="food-result-meta">
                         {food.calories} kcal · {food.protein}g protein · {food.carbs}g carbs · {food.fat}g fat
                         {food.brand && <span> · {food.brand}</span>}
                       </div>
@@ -474,7 +451,7 @@ export default function Nutrition() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '1 1 150px' }}>
+            <div className="serving-input-group">
               <input
                 type="number"
                 min="0.1"
@@ -482,16 +459,12 @@ export default function Nutrition() {
                 placeholder="Serving size"
                 value={servingSize}
                 onChange={handleServingChange}
-                style={inputStyle({ flex: 1, minWidth: 0 })}
+                className="nutrition-input serving-size"
               />
               <button
                 type="button"
                 onClick={handleUnitToggle}
-                style={{
-                  background: '#f0f0f0', border: 'none', borderRadius: 6,
-                  padding: '7px 10px', cursor: 'pointer', fontSize: 12,
-                  fontWeight: 600, color: '#555', whiteSpace: 'nowrap',
-                }}
+                className="unit-toggle-btn"
               >{servingUnit}</button>
             </div>
             <input
@@ -502,7 +475,7 @@ export default function Nutrition() {
               placeholder="Calories *"
               value={form.calories}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 100px' })}
+              className="nutrition-input macro-lg"
             />
             <input
               name="protein"
@@ -512,7 +485,7 @@ export default function Nutrition() {
               placeholder="Protein (g)"
               value={form.protein}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 100px' })}
+              className="nutrition-input macro-lg"
             />
             <input
               name="carbs"
@@ -522,7 +495,7 @@ export default function Nutrition() {
               placeholder="Carbs (g)"
               value={form.carbs}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 100px' })}
+              className="nutrition-input macro-lg"
             />
             <input
               name="fat"
@@ -532,7 +505,7 @@ export default function Nutrition() {
               placeholder="Fat (g)"
               value={form.fat}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 100px' })}
+              className="nutrition-input macro-lg"
             />
             <input
               name="fiber"
@@ -542,7 +515,7 @@ export default function Nutrition() {
               placeholder="Fiber (g)"
               value={form.fiber}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 90px' })}
+              className="nutrition-input macro-sm"
             />
             <input
               name="sugar"
@@ -552,27 +525,19 @@ export default function Nutrition() {
               placeholder="Sugar (g)"
               value={form.sugar}
               onChange={handleChange}
-              style={inputStyle({ flex: '1 1 90px' })}
+              className="nutrition-input macro-sm"
             />
           </div>
-          {error && <p style={{ color: '#e05c5c', margin: '0 0 10px', fontSize: 13 }}>{error}</p>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <button type="submit" style={{
-              background: '#ff8c42', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '9px 22px', fontWeight: 600,
-              cursor: 'pointer', fontSize: 14,
-            }}>
+          {error && <p className="nutrition-error">{error}</p>}
+          <div className="form-actions">
+            <button type="submit" className="btn-add-entry">
               + Add Entry
             </button>
             <button
               type="button"
               onClick={handleSaveToMyFoods}
               disabled={!form.name.trim() || savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase())}
-              style={{
-                background: 'none', border: '1px solid #ddd', borderRadius: 8,
-                padding: '9px 18px', cursor: 'pointer', fontSize: 14, color: '#555',
-                fontWeight: 500, opacity: (!form.name.trim() || savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase())) ? 0.4 : 1,
-              }}
+              className="btn-save-to-my-foods"
             >
               {savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase()) ? 'Already in My Foods' : 'Save to My Foods'}
             </button>
@@ -581,25 +546,18 @@ export default function Nutrition() {
       </div>
 
       {/* My Foods Library */}
-      <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 4px 14px rgba(0,0,0,0.07)', marginBottom: 24, overflow: 'hidden' }}>
-        <button
-          onClick={() => setMyFoodsOpen(o => !o)}
-          style={{
-            width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '14px 20px', fontSize: 15, fontWeight: 600, color: '#333',
-          }}
-        >
-          <span>My Foods <span style={{ fontSize: 12, fontWeight: 400, color: '#aaa', marginLeft: 6 }}>{savedFoods.length} saved</span></span>
-          <span style={{ fontSize: 12, color: '#aaa' }}>{myFoodsOpen ? '▲' : '▼'}</span>
+      <div className="my-foods-section">
+        <button onClick={() => setMyFoodsOpen(o => !o)} className="my-foods-toggle-btn">
+          <span>My Foods <span className="my-foods-count">{savedFoods.length} saved</span></span>
+          <span className="my-foods-chevron">{myFoodsOpen ? '▲' : '▼'}</span>
         </button>
         {myFoodsOpen && (
           savedFoods.length === 0 ? (
-            <p style={{ textAlign: 'center', color: '#bbb', padding: '20px 0', margin: 0, fontSize: 14 }}>
+            <p className="my-foods-empty">
               No saved foods yet — check "Save to My Foods" when adding an entry.
             </p>
           ) : (
-            <div style={{ padding: '0 16px 16px' }}>
+            <div className="my-foods-list">
               {savedFoods.map(food => {
                 const serving = myFoodsServings[food.name];
                 const currentSize = serving?.size ?? food.refServingSize ?? '';
@@ -619,26 +577,21 @@ export default function Nutrition() {
                 }
 
                 return (
-                  <div key={food.name} style={{
-                    padding: '10px 12px', borderRadius: 8, marginBottom: 6,
-                    background: '#fafafa', border: '1px solid #f0f0f0',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div key={food.name} className="my-food-item">
+                    <div className="my-food-item-header">
                       <div>
-                        <span style={{ fontWeight: 600, fontSize: 14 }}>{food.name}</span>
+                        <span className="my-food-name">{food.name}</span>
                         {refSize && (
-                          <span style={{ fontSize: 11, color: '#bbb', marginLeft: 8 }}>
-                            ref: {refSize}{refUnit}
-                          </span>
+                          <span className="my-food-ref">ref: {refSize}{refUnit}</span>
                         )}
                       </div>
                       <button
                         onClick={() => handleDeleteSaved(food.name)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}
+                        className="btn-remove-food"
                         title="Remove from My Foods"
                       >✕</button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="my-food-actions">
                       <input
                         type="number"
                         min="0.1"
@@ -649,7 +602,7 @@ export default function Nutrition() {
                           ...prev,
                           [food.name]: { size: e.target.value, unit: currentUnit },
                         }))}
-                        style={inputStyle({ width: 90 })}
+                        className="nutrition-input my-food-size"
                       />
                       <button
                         type="button"
@@ -657,12 +610,9 @@ export default function Nutrition() {
                           ...prev,
                           [food.name]: { size: currentSize, unit: currentUnit === 'g' ? 'oz' : 'g' },
                         }))}
-                        style={{
-                          background: '#f0f0f0', border: 'none', borderRadius: 6,
-                          padding: '7px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#555',
-                        }}
+                        className="unit-toggle-btn"
                       >{currentUnit}</button>
-                      <span style={{ fontSize: 12, color: '#aaa' }}>
+                      <span className="my-food-preview">
                         {preview.calories} kcal
                         {preview.protein > 0 && ` · ${preview.protein}g protein`}
                         {preview.carbs > 0 && ` · ${preview.carbs}g carbs`}
@@ -670,11 +620,7 @@ export default function Nutrition() {
                       </span>
                       <button
                         onClick={() => handleAddFromLibrary(food)}
-                        style={{
-                          background: '#ff8c42', color: '#fff', border: 'none',
-                          borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
-                          fontSize: 12, fontWeight: 600, marginLeft: 'auto',
-                        }}
+                        className="btn-add-from-library"
                       >+ Add</button>
                     </div>
                   </div>
@@ -686,82 +632,70 @@ export default function Nutrition() {
       </div>
 
       {/* Log Table */}
-      <div style={{ background: '#fff', borderRadius: 10, boxShadow: '0 4px 14px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Today's Log ({entries.length} {entries.length === 1 ? 'item' : 'items'})</h3>
+      <div className="log-section">
+        <div className="log-header">
+          <h3>Today&apos;s Log ({entries.length} {entries.length === 1 ? 'item' : 'items'})</h3>
           {entries.length > 0 && (
-            <button onClick={handleClearAll} style={{
-              background: 'none', border: '1px solid #ddd', borderRadius: 6,
-              padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: '#888',
-            }}>
+            <button onClick={handleClearAll} className="btn-clear-all">
               Clear All
             </button>
           )}
         </div>
 
         {entries.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#bbb', padding: '32px 0', margin: 0 }}>
+          <p className="log-empty">
             No foods logged yet — add your first entry above.
           </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <div className="log-table-wrapper">
+            <table className="log-table">
               <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={thStyle({ textAlign: 'left' })}>Food</th>
+                <tr>
+                  <th className="text-left">Food</th>
                   {visibleMacroList.map(m => (
-                    <th key={m.key} style={thStyle()}>{m.label}<br /><span style={{ fontWeight: 400, color: '#aaa', fontSize: 11 }}>{m.unit}</span></th>
+                    <th key={m.key}>{m.label}<br /><span className="th-unit">{m.unit}</span></th>
                   ))}
-                  <th style={thStyle({ color: '#aaa' })}>Time</th>
-                  <th style={thStyle()}></th>
+                  <th className="col-muted">Time</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((entry, i) => (
-                  <tr key={entry.id} style={{ borderTop: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                    <td style={{ padding: '10px 16px', fontWeight: 500 }}>
+                  <tr key={entry.id} className={i % 2 === 0 ? 'row-even' : 'row-odd'}>
+                    <td className="td-food">
                       {entry.name}
                       {entry.servingSize && (
-                        <div style={{ fontSize: 11, color: '#bbb', fontWeight: 400, marginTop: 2 }}>
+                        <div className="td-serving-size">
                           {entry.servingSize}{entry.servingUnit}
                         </div>
                       )}
                     </td>
                     {visibleMacroList.map(m => (
-                      <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', color: m.key === 'calories' ? '#ff8c42' : '#333', fontWeight: m.key === 'calories' ? 600 : 400 }}>
-                        {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: '#ddd' }}>—</span>}
+                      <td key={m.key} className={`td-macro ${m.key === 'calories' ? 'calories' : 'default'}`}>
+                        {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span className="td-dash">—</span>}
                       </td>
                     ))}
-                    <td style={{ padding: '10px 16px', textAlign: 'center', color: '#aaa', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {entry.time || '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td className="td-time">{entry.time || '—'}</td>
+                    <td className="td-actions">
                       <button
                         onClick={() => handleSaveEntryToMyFoods(entry)}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: '#bbb', lineHeight: 1, padding: 4,
-                          visibility: savedFoods.some(f => f.name.toLowerCase() === entry.name.toLowerCase()) ? 'hidden' : 'visible',
-                        }}
+                        className={`btn-save-entry${savedFoods.some(f => f.name.toLowerCase() === entry.name.toLowerCase()) ? ' hidden' : ''}`}
                         title="Save to My Foods"
                       >
                         <svg width="13" height="15" viewBox="0 0 13 15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
                           <path d="M1.5 1.5h10v12l-5-3-5 3V1.5z" />
                         </svg>
                       </button>
-                      <button onClick={() => handleDelete(entry.id)} style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#ccc', fontSize: 16, lineHeight: 1, padding: 4,
-                      }} title="Remove">✕</button>
+                      <button onClick={() => handleDelete(entry.id)} className="btn-delete-entry" title="Remove">✕</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr style={{ borderTop: '2px solid #eee', background: '#fff8f3' }}>
-                  <td style={{ padding: '10px 16px', fontWeight: 700, color: '#555' }}>Total</td>
+                <tr>
+                  <td className="td-total-label">Total</td>
                   {visibleMacroList.map(m => (
-                    <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: m.color }}>
+                    <td key={m.key} className="td-total-value" style={{ color: m.color }}>
                       {m.key === 'calories' ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
                     </td>
                   ))}
@@ -775,29 +709,4 @@ export default function Nutrition() {
       </div>
     </div>
   );
-}
-
-function inputStyle(extra = {}) {
-  return {
-    padding: '9px 12px',
-    border: '1px solid #e0e0e0',
-    borderRadius: 8,
-    fontSize: 14,
-    outline: 'none',
-    background: '#fafafa',
-    minWidth: 0,
-    ...extra,
-  };
-}
-
-function thStyle(extra = {}) {
-  return {
-    padding: '10px 16px',
-    fontWeight: 600,
-    fontSize: 13,
-    color: '#555',
-    textAlign: 'center',
-    whiteSpace: 'nowrap',
-    ...extra,
-  };
 }

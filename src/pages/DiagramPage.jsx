@@ -5,6 +5,7 @@ import HumanDiagramBack from '../components/HumanDiagramBack'
 import HumanDiagramFemaleFront from '../components/HumanDiagramFemaleFront'
 import HumanDiagramFemaleBack from '../components/HumanDiagramFemaleBack'
 import muscles from '../data/muscles'
+import '../pages-css/DiagramPage.css'
 
 export default function DiagramPage() {
   const [selected, setSelected] = useState(null)
@@ -91,60 +92,32 @@ export default function DiagramPage() {
 
   return (
     <>
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8 }}>
+      <div className="diagram-view-controls">
         <button
           type="button"
           onClick={() => setDiagramView('front')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 999,
-            border: '1px solid #d1d5db',
-            background: diagramView === 'front' ? '#ff8c42' : '#fff',
-            color: diagramView === 'front' ? '#fff' : '#111',
-            cursor: 'pointer',
-          }}
+          className={`view-btn${diagramView === 'front' ? ' active' : ''}`}
         >
           Front (Male)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('back')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 999,
-            border: '1px solid #d1d5db',
-            background: diagramView === 'back' ? '#ff8c42' : '#fff',
-            color: diagramView === 'back' ? '#fff' : '#111',
-            cursor: 'pointer',
-          }}
+          className={`view-btn${diagramView === 'back' ? ' active' : ''}`}
         >
           Back (Male)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('front2')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 999,
-            border: '1px solid #d1d5db',
-            background: diagramView === 'front2' ? '#ff8c42' : '#fff',
-            color: diagramView === 'front2' ? '#fff' : '#111',
-            cursor: 'pointer',
-          }}
+          className={`view-btn${diagramView === 'front2' ? ' active' : ''}`}
         >
           Front (Female)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('back2')}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 999,
-            border: '1px solid #d1d5db',
-            background: diagramView === 'back2' ? '#ff8c42' : '#fff',
-            color: diagramView === 'back2' ? '#fff' : '#111',
-            cursor: 'pointer',
-          }}
+          className={`view-btn${diagramView === 'back2' ? ' active' : ''}`}
         >
           Back (Female)
         </button>
@@ -178,34 +151,23 @@ export default function DiagramPage() {
                 </p>
               ) : null}
               {displayInfo.parts && displayInfo.parts.length ? (
-                <div style={{ marginTop: 8 }}>
+                <div className="parts-container">
                   <p>
                     <strong>Parts</strong>
                   </p>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div className="parts-list">
                     {displayInfo.parts.map((p) => (
                       <button
                         key={p.key}
                         onClick={() => setActivePart(p.key)}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          border:
-                            activePart === p.key
-                              ? '2px solid #ff8c42'
-                              : '1px solid #ddd',
-                          background:
-                            activePart === p.key ? '#ff8c42' : '#fff',
-                          color: activePart === p.key ? '#fff' : '#111',
-                          cursor: 'pointer',
-                        }}
+                        className={`part-btn${activePart === p.key ? ' active' : ''}`}
                       >
                         {p.name}
                       </button>
                     ))}
                     <button
                       onClick={() => setActivePart(null)}
-                      style={{ padding: '6px 10px' }}
+                      className="part-btn-clear"
                     >
                       Clear
                     </button>
@@ -220,7 +182,7 @@ export default function DiagramPage() {
                   )
                   if (!part) return null
                   return (
-                    <div style={{ marginTop: 10 }}>
+                    <div className="part-detail">
                       <p>{part.description}</p>
                       {part.tips ? (
                         <p>
