@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import muscles from '../data/muscles.js';
-import '../pages-css/ExerciseLogger.css';
 
 const ROUTINES_KEY = 'exercise_routines';
 
@@ -235,44 +234,44 @@ export default function ExerciseLogger() {
   // SELECT VIEW
   // ═══════════════════════════════════════════════
   if (view === 'select') return (
-    <div className="exercise-logger">
-      <h2 style={{ marginBottom: 4 }}>Exercise Logger</h2>
-      <p className="logger-subtitle">{today}</p>
+    <div className="max-w-[860px] mx-auto px-2">
+      <p className="font-bold text-[2rem] mb-1">Exercise Logger</p>
+      <p className="text-[#888] mb-6 text-sm">{today}</p>
 
-      <div className="select-grid">
-        <button onClick={goCreate} className="create-routine-btn">
-          <div className="action-card-icon">📋</div>
-          <div className="action-card-title">Create Routine</div>
-          <div className="action-card-desc">Build a named template with exercises to reuse later</div>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <button onClick={goCreate} className="bg-white border-2 border-dashed border-[#e0e0e0] rounded-xl p-7 cursor-pointer text-left shadow-sm hover:border-[#ff8c42]">
+          <div className="text-[26px] mb-2.5">📋</div>
+          <div className="text-base font-bold text-[#333]">Create Routine</div>
+          <div className="text-[13px] text-[#aaa] mt-1.5 leading-snug">Build a named template with exercises to reuse later</div>
         </button>
-        <button onClick={goFreeSession} className="new-workout-btn">
-          <div className="action-card-icon">⚡</div>
-          <div className="action-card-title">New Workout</div>
-          <div className="action-card-desc">Log exercises as you go — option to save as a routine when done</div>
+        <button onClick={goFreeSession} className="bg-[#ff8c42] border-0 rounded-xl p-7 cursor-pointer text-left shadow-[0_4px_16px_rgba(255,140,66,0.35)]">
+          <div className="text-[26px] mb-2.5">⚡</div>
+          <div className="text-base font-bold text-white">New Workout</div>
+          <div className="text-[13px] text-white/85 mt-1.5 leading-snug">Log exercises as you go — option to save as a routine when done</div>
         </button>
       </div>
 
-      <div className="routines-header">
-        <span className="routines-label">My Routines</span>
-        <span className="routines-count">({routines.length})</span>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[13px] font-semibold text-[#888] uppercase tracking-[0.05em]">My Routines</span>
+        <span className="text-xs text-[#ccc]">({routines.length})</span>
       </div>
 
       {routines.length === 0 ? (
-        <div className="no-routines">
+        <div className="bg-white rounded-xl py-9 text-center text-[#bbb] text-sm shadow-sm">
           No routines yet — create your first one above.
         </div>
       ) : (
         routines.map(r => (
-          <div key={r.id} className="routine-item">
-            <div className="routine-info">
-              <div className="routine-name">{r.name}</div>
-              <div className="routine-exercises">
+          <div key={r.id} className="bg-white rounded-xl px-5 py-4 mb-2.5 shadow-sm flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-bold text-[15px]">{r.name}</div>
+              <div className="text-xs text-[#aaa] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
                 {r.exercises.length} exercise{r.exercises.length !== 1 ? 's' : ''}: {r.exercises.map(e => e.name).join(', ')}
               </div>
             </div>
-            <div className="routine-actions">
-              <button onClick={() => goRoutineSession(r)} className="btn-start">▶ Start</button>
-              <button onClick={() => deleteRoutine(r.id)} className="btn-delete-routine" title="Delete routine">✕</button>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => goRoutineSession(r)} className="bg-[#ff8c42] text-white border-0 rounded-lg px-4 py-1.5 cursor-pointer font-semibold text-[13px]">▶ Start</button>
+              <button onClick={() => deleteRoutine(r.id)} className="bg-transparent border-0 cursor-pointer text-[#ccc] text-base px-1.5 py-1" title="Delete routine">✕</button>
             </div>
           </div>
         ))
@@ -284,47 +283,47 @@ export default function ExerciseLogger() {
   // CREATE ROUTINE VIEW
   // ═══════════════════════════════════════════════
   if (view === 'create') return (
-    <div className="exercise-logger">
-      <div className="logger-header">
-        <button onClick={() => setView('select')} className="btn-back">← Back</button>
+    <div className="max-w-[860px] mx-auto px-2">
+      <div className="flex items-center gap-3.5 mb-1">
+        <button onClick={() => setView('select')} className="bg-transparent border border-[#e0e0e0] rounded-lg px-3.5 py-1.5 cursor-pointer text-[13px] text-[#555]">← Back</button>
         <h2>Create Routine</h2>
       </div>
-      <p className="logger-subtitle">Build a reusable workout template</p>
+      <p className="text-[#888] mb-6 text-sm">Build a reusable workout template</p>
 
       {/* Routine name */}
-      <div className="form-card">
-        <label className="form-label">Routine Name *</label>
+      <div className="bg-white rounded-xl px-6 py-5 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-5">
+        <label className="text-[13px] font-semibold text-[#555] block mb-2">Routine Name *</label>
         <input
           value={cName}
           onChange={e => { setCName(e.target.value); setCError(''); }}
           placeholder="e.g. Push Day, Full Body, Upper/Lower…"
-          className="logger-input full-width"
+          className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border"
         />
       </div>
 
       {/* Exercise search */}
-      <div className="search-card">
-        <div ref={cSearchRef} className="search-wrapper">
+      <div className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-4">
+        <div ref={cSearchRef} className="relative">
           <input
             value={cSearch}
             onChange={e => { setCSearch(e.target.value); setCDropdownOpen(true); setCError(''); }}
             onKeyDown={cHandleSearchKey}
             onFocus={() => setCDropdownOpen(true)}
             placeholder="Search exercises or type a custom name…"
-            className="logger-input full-width search-padded"
+            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
           />
-          <span className="search-icon">🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-[#aaa]">🔍</span>
           {cDropdownOpen && cSearch.trim() && (
-            <div className="search-dropdown">
+            <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
               {cSearchResults.length > 0 ? (
                 cSearchResults.map(ex => (
                   <button key={ex} onMouseDown={e => { e.preventDefault(); cAddExercise(ex); }}
-                    className="dropdown-item"
+                    className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#333] block hover:bg-[#fff8f2]"
                   >{ex}</button>
                 ))
               ) : (
                 <button onMouseDown={e => { e.preventDefault(); cAddExercise(cSearch); }}
-                  className="dropdown-add"
+                  className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] block"
                 >+ Add &ldquo;{cSearch}&rdquo; as custom exercise</button>
               )}
             </div>
@@ -334,7 +333,7 @@ export default function ExerciseLogger() {
 
       {/* Exercise cards */}
       {cExs.length > 0 && (
-        <div className="exercise-list">
+        <div className="mb-6">
           {cExs.map((ex, exIdx) => (
             <ExerciseCard
               key={exIdx}
@@ -350,9 +349,9 @@ export default function ExerciseLogger() {
         </div>
       )}
 
-      {cError && <p className="logger-error">{cError}</p>}
+      {cError && <p className="text-[#e05c5c] mb-3 text-[13px]">{cError}</p>}
 
-      <button onClick={cSave} className="btn-save-routine">
+      <button onClick={cSave} className="bg-[#ff8c42] text-white border-0 rounded-xl px-8 py-3 font-bold cursor-pointer text-[15px]">
         Save Routine
       </button>
     </div>
@@ -362,92 +361,94 @@ export default function ExerciseLogger() {
   // SESSION VIEW
   // ═══════════════════════════════════════════════
   return (
-    <div className="exercise-logger">
+    <div className="max-w-[860px] mx-auto px-2">
       {/* Header */}
-      <div className="session-header">
-        <div className="session-title-group">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-3 min-w-0">
           <h2>{sessionName}</h2>
           {sessionSource === 'routine' && (
-            <span className="routine-badge">ROUTINE</span>
+            <span className="text-[11px] font-semibold bg-[#f0f4ff] text-[#4f8ef7] rounded-[5px] px-2 py-0.5 shrink-0">ROUTINE</span>
           )}
         </div>
         {!ending && (
-          <button onClick={() => setEnding(true)} className="btn-end-session">
+          <button onClick={() => setEnding(true)} className="bg-transparent border border-[#e0e0e0] rounded-lg px-4 py-1.5 cursor-pointer text-[13px] text-[#555] font-semibold shrink-0">
             End Session
           </button>
         )}
       </div>
-      <p className="logger-subtitle">{today}</p>
+      <p className="text-[#888] mb-6 text-sm">{today}</p>
 
       {/* End session panel */}
       {ending && (
-        <div className="end-session-panel">
-          <div className="end-panel-header">
+        <div className="bg-white rounded-xl px-6 py-5 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-6 border-2 border-[#ff8c42]">
+          <div className="flex justify-between items-start mb-3">
             <div>
               <h3>Finish Workout</h3>
-              <p className="end-panel-stats">
+              <p className="text-[13px] text-[#888] m-0">
                 {uniqueEx} exercise{uniqueEx !== 1 ? 's' : ''} · {totalSets} set{totalSets !== 1 ? 's' : ''} completed{totalVol > 0 ? ` · ${totalVol.toLocaleString()} vol` : ''}
               </p>
             </div>
-            <button onClick={() => setEnding(false)} className="btn-close-panel">✕</button>
+            <button onClick={() => setEnding(false)} className="bg-transparent border-0 cursor-pointer text-[#bbb] text-xl leading-none p-1">✕</button>
           </div>
-          <div className="save-as-routine-row">
+          <div className="flex gap-2.5 flex-wrap mb-3">
             <input
               value={saveName}
               onChange={e => setSaveName(e.target.value)}
               placeholder="Routine name to save as…"
-              className="logger-input flex-save"
+              className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 flex-[1_1_200px]"
             />
             <button
               onClick={doSaveAsRoutine}
               disabled={!saveName.trim()}
-              className={`btn-save-as-routine ${saveName.trim() ? 'enabled' : 'disabled'}`}
+              className={saveName.trim()
+                ? 'bg-[#ff8c42] text-white border-0 rounded-lg px-5 py-2.5 font-semibold text-sm cursor-pointer'
+                : 'bg-[#f0f0f0] text-[#aaa] border-0 rounded-lg px-5 py-2.5 font-semibold text-sm cursor-default'}
             >Save as Routine</button>
           </div>
-          <button onClick={finishSession} className="btn-finish-without-saving">
+          <button onClick={finishSession} className="bg-transparent border border-[#e0e0e0] rounded-lg px-4 py-2 cursor-pointer text-[13px] text-[#666]">
             Finish Without Saving
           </button>
         </div>
       )}
 
       {/* Summary cards */}
-      <div className="summary-grid">
+      <div className="grid grid-cols-3 gap-3 mb-6">
         {[
           { label: 'Exercises',  value: uniqueEx,                                        sub: 'with completed sets', color: '#ff8c42' },
           { label: 'Sets Done',  value: totalSets,                                       sub: 'sets completed',      color: '#4f8ef7' },
           { label: 'Volume',     value: totalVol > 0 ? totalVol.toLocaleString() : '—', sub: 'weighted only',       color: '#5cb85c' },
         ].map(card => (
-          <div key={card.label} className="summary-card" style={{ borderTop: `4px solid ${card.color}` }}>
-            <div className="summary-value" style={{ color: card.color }}>{card.value}</div>
-            <div className="summary-sub">{card.sub}</div>
-            <div className="summary-label">{card.label}</div>
+          <div key={card.label} className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] text-center" style={{ borderTop: `4px solid ${card.color}` }}>
+            <div className="text-[26px] font-bold" style={{ color: card.color }}>{card.value}</div>
+            <div className="text-[11px] text-[#aaa] mt-0.5">{card.sub}</div>
+            <div className="text-[13px] font-semibold mt-1">{card.label}</div>
           </div>
         ))}
       </div>
 
       {/* Add exercise search */}
-      <div className="search-card">
-        <div ref={sSearchRef} className="search-wrapper">
+      <div className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-4">
+        <div ref={sSearchRef} className="relative">
           <input
             value={sSearch}
             onChange={e => { setSSearch(e.target.value); setSDropdownOpen(true); }}
             onKeyDown={sHandleSearchKey}
             onFocus={() => setSDropdownOpen(true)}
             placeholder="Search exercises or type a custom name…"
-            className="logger-input full-width search-padded"
+            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
           />
-          <span className="search-icon">🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-[#aaa]">🔍</span>
           {sDropdownOpen && sSearch.trim() && (
-            <div className="search-dropdown">
+            <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
               {sSearchResults.length > 0 ? (
                 sSearchResults.map(ex => (
                   <button key={ex} onMouseDown={e => { e.preventDefault(); sAddExercise(ex); }}
-                    className="dropdown-item"
+                    className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#333] block hover:bg-[#fff8f2]"
                   >{ex}</button>
                 ))
               ) : (
                 <button onMouseDown={e => { e.preventDefault(); sAddExercise(sSearch); }}
-                  className="dropdown-add"
+                  className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] block"
                 >+ Add &ldquo;{sSearch}&rdquo; as custom exercise</button>
               )}
             </div>
@@ -457,7 +458,7 @@ export default function ExerciseLogger() {
 
       {/* Exercise cards */}
       {sessionExs.length === 0 ? (
-        <div className="no-exercises">
+        <div className="bg-white rounded-xl py-10 text-center text-[#bbb] text-sm shadow-sm">
           Search for an exercise above to get started.
         </div>
       ) : (
@@ -481,33 +482,33 @@ export default function ExerciseLogger() {
 
 // ── Shared exercise card component
 function ExerciseCard({ ex, showDone, onUpdateSet, onRemoveSet, onAddSet, onUpdateUnit, onRemove, onToggleDone }) {
-  const colClass = showDone ? 'with-done' : 'no-done';
+  const colGrid = showDone ? 'grid-cols-[32px_40px_1fr_1fr_1fr_24px]' : 'grid-cols-[40px_1fr_1fr_1fr_24px]';
 
   return (
-    <div className="exercise-card">
+    <div className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-3">
       {/* Exercise header */}
-      <div className="exercise-card-header">
-        <span className="exercise-name">{ex.name}</span>
-        <div className="exercise-card-controls">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-bold text-[15px] text-[#222]">{ex.name}</span>
+        <div className="flex items-center gap-2">
           <select
             value={ex.unit}
             onChange={e => onUpdateUnit(e.target.value)}
-            className="logger-select"
+            className="py-1.5 px-2 text-[13px] cursor-pointer w-16 border border-[#e0e0e0] rounded-lg bg-[#fafafa] outline-none"
           >
             <option value="lbs">lbs</option>
             <option value="kg">kg</option>
           </select>
-          <button onClick={onRemove} className="btn-remove-exercise" title="Remove exercise">✕</button>
+          <button onClick={onRemove} className="bg-transparent border-0 cursor-pointer text-[#ccc] text-base px-1 py-0.5 leading-none" title="Remove exercise">✕</button>
         </div>
       </div>
 
       {/* Column labels */}
-      <div className={`col-labels ${colClass}`}>
+      <div className={`grid ${colGrid} gap-1.5 mb-1`}>
         {showDone && <span />}
         <span />
-        <span className="col-label">REPS</span>
-        <span className="col-label">WEIGHT</span>
-        <span className="col-label">RIR</span>
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">REPS</span>
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">WEIGHT</span>
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">RIR</span>
         <span />
       </div>
 
@@ -515,34 +516,36 @@ function ExerciseCard({ ex, showDone, onUpdateSet, onRemoveSet, onAddSet, onUpda
       {ex.sets.map((s, si) => {
         const done = showDone && s.done;
         return (
-          <div key={si} className={`set-row ${colClass}${done ? ' completed' : ''}`}>
+          <div key={si} className={`grid ${colGrid} gap-1.5 mb-1.5 items-center transition-colors${done ? ' bg-[#f0fdf4] rounded-lg px-1 py-0.5' : ''}`}>
             {showDone && (
               <button
                 onClick={() => onToggleDone(si)}
                 title={done ? 'Mark incomplete' : 'Mark complete'}
-                className={`toggle-done-btn ${done ? 'done' : 'undone'}`}
+                className={done
+                  ? 'w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-0 bg-[#5cb85c]'
+                  : 'w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-2 border-[#d0d0d0] bg-transparent'}
               >{done ? '✓' : ''}</button>
             )}
-            <span className="set-number">{si + 1}</span>
+            <span className="text-xs text-[#aaa] font-semibold text-right pr-1">{si + 1}</span>
             <input
               type="number" min="1" placeholder="—" value={s.reps}
               onChange={e => onUpdateSet(si, 'reps', e.target.value)}
-              className={`logger-input center-text set-input${done ? ' faded' : ''}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? ' opacity-50' : ''}`}
             />
             <input
               type="number" min="0" step="0.5" placeholder="—" value={s.weight}
               onChange={e => onUpdateSet(si, 'weight', e.target.value)}
-              className={`logger-input center-text set-input${done ? ' faded' : ''}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? ' opacity-50' : ''}`}
             />
             <input
               type="number" min="0" max="10" placeholder="—" value={s.rir}
               onChange={e => onUpdateSet(si, 'rir', e.target.value)}
-              className={`logger-input center-text set-input${done ? ' faded' : ''}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? ' opacity-50' : ''}`}
             />
             <button
               onClick={() => onRemoveSet(si)}
               disabled={ex.sets.length === 1}
-              className="btn-remove-set"
+              className="bg-transparent border-0 text-[15px] p-0 leading-none text-[#ccc] cursor-pointer disabled:cursor-default disabled:text-[#eee]"
               title="Remove set"
             >✕</button>
           </div>
@@ -550,7 +553,7 @@ function ExerciseCard({ ex, showDone, onUpdateSet, onRemoveSet, onAddSet, onUpda
       })}
 
       {/* Add set */}
-      <button onClick={onAddSet} className="btn-add-set">+ Add Set</button>
+      <button onClick={onAddSet} className="mt-1.5 bg-transparent border border-dashed border-[#e0e0e0] rounded-[7px] px-3.5 py-1.5 cursor-pointer text-[13px] text-[#888] hover:border-[#ff8c42] hover:text-[#ff8c42]">+ Add Set</button>
     </div>
   );
 }

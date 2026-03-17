@@ -1,9 +1,9 @@
+@import "tailwindcss";
+
 :root{--bg:#f7f7fb;--accent:#ff8c42;--muted:#333}
 body{font-family:Inter,Segoe UI,Arial,Helvetica,sans-serif;margin:20px;background:var(--bg);color:var(--muted)}
 .app{max-width:1000px;margin:0 auto}
-.layout{display:flex;gap:20px;align-items:flex-start}
 .diagram{background:#fff;padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-.info{background:#fff;padding:12px;border-radius:8px;flex:1;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
 .muscle path,.muscle rect,.muscle ellipse{fill:#e9eef6;stroke:#3b3b3b;stroke-width:1}
 .muscle:hover path,.muscle:hover rect,.muscle:hover ellipse{fill:#dbe7ff;cursor:pointer}
 .muscle.selected path,.muscle.selected rect,.muscle.selected ellipse{fill:var(--accent)}

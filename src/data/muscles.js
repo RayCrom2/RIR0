@@ -109,7 +109,7 @@ const muscles = {
     description:
       'The large posterior muscles responsible for pulling, posture, and scapular control.',
     tips: 'Train pulling movements with full scapular retraction; maintain spinal neutrality.',
-    exercises: ['Pull-ups', 'Seated Row', 'Lat pulldown'],
+    exercises: ['Pull-ups', 'Seated row', 'Lat pulldown'],
     contraindications: ['Avoid heavy rounding under load if lower-back pain exists'],
   },
 

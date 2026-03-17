@@ -15,7 +15,7 @@ export default function App() {
         <NavLink to="/nutrition">Nutrition</NavLink>
         <NavLink to="/exerciselogger">Exercise Logger</NavLink>
       </nav>
-      <h1>AIOFitness</h1>
+      <p className="font-bold text-[2rem] mb-1">AIOFitness</p>
 
       <Routes>
         <Route path="/" element={<div><h2>Welcome to AIOFitness</h2><p>Select a page from the navigation above.</p></div>} />
