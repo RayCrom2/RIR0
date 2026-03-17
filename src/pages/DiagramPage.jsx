@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import HumanDiagram from '../components/HumanDiagram'
 import HumanDiagramBack from '../components/HumanDiagramBack'
 import HumanDiagramFemaleFront from '../components/HumanDiagramFemaleFront'
 import HumanDiagramFemaleBack from '../components/HumanDiagramFemaleBack'
 import muscles from '../data/muscles'
-import '../pages-css/DiagramPage.css'
 
 export default function DiagramPage() {
   const [selected, setSelected] = useState(null)
@@ -92,38 +91,46 @@ export default function DiagramPage() {
 
   return (
     <>
-      <div className="diagram-view-controls">
+      <div className="mb-3 flex gap-2">
         <button
           type="button"
           onClick={() => setDiagramView('front')}
-          className={`view-btn${diagramView === 'front' ? ' active' : ''}`}
+          className={diagramView === 'front'
+            ? 'px-3 py-1.5 rounded-full border cursor-pointer bg-[#ff8c42] text-white border-[#ff8c42]'
+            : 'px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-900 cursor-pointer'}
         >
           Front (Male)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('back')}
-          className={`view-btn${diagramView === 'back' ? ' active' : ''}`}
+          className={diagramView === 'back'
+            ? 'px-3 py-1.5 rounded-full border cursor-pointer bg-[#ff8c42] text-white border-[#ff8c42]'
+            : 'px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-900 cursor-pointer'}
         >
           Back (Male)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('front2')}
-          className={`view-btn${diagramView === 'front2' ? ' active' : ''}`}
+          className={diagramView === 'front2'
+            ? 'px-3 py-1.5 rounded-full border cursor-pointer bg-[#ff8c42] text-white border-[#ff8c42]'
+            : 'px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-900 cursor-pointer'}
         >
           Front (Female)
         </button>
         <button
           type="button"
           onClick={() => setDiagramView('back2')}
-          className={`view-btn${diagramView === 'back2' ? ' active' : ''}`}
+          className={diagramView === 'back2'
+            ? 'px-3 py-1.5 rounded-full border cursor-pointer bg-[#ff8c42] text-white border-[#ff8c42]'
+            : 'px-3 py-1.5 rounded-full border border-gray-300 bg-white text-gray-900 cursor-pointer'}
         >
           Back (Female)
         </button>
       </div>
 
-      <div className="layout" ref={diagramRef}>
+      <div className="flex gap-5 items-start" ref={diagramRef}>
         {diagramView === 'front' ? (
           <HumanDiagram
             selected={selected}
@@ -138,7 +145,7 @@ export default function DiagramPage() {
           <HumanDiagramFemaleBack selected={selected} onSelect={handleSelect} />
         )}
 
-        <div className="info">
+        <div className="bg-white p-3 rounded-lg flex-1 shadow-[0_6px_18px_rgba(0,0,0,0.06)]">
           <h2>
             <strong>{displayName}</strong>
           </h2>
@@ -151,23 +158,25 @@ export default function DiagramPage() {
                 </p>
               ) : null}
               {displayInfo.parts && displayInfo.parts.length ? (
-                <div className="parts-container">
+                <div className="mt-2">
                   <p>
                     <strong>Parts</strong>
                   </p>
-                  <div className="parts-list">
+                  <div className="flex gap-2 flex-wrap">
                     {displayInfo.parts.map((p) => (
                       <button
                         key={p.key}
                         onClick={() => setActivePart(p.key)}
-                        className={`part-btn${activePart === p.key ? ' active' : ''}`}
+                        className={activePart === p.key
+                          ? 'px-2.5 py-1.5 rounded-md border-2 border-[#ff8c42] bg-[#ff8c42] text-white cursor-pointer'
+                          : 'px-2.5 py-1.5 rounded-md border border-gray-300 bg-white text-gray-900 cursor-pointer'}
                       >
                         {p.name}
                       </button>
                     ))}
                     <button
                       onClick={() => setActivePart(null)}
-                      className="part-btn-clear"
+                      className="px-2.5 py-1.5 rounded-md border border-gray-300 bg-white cursor-pointer"
                     >
                       Clear
                     </button>
@@ -182,7 +191,7 @@ export default function DiagramPage() {
                   )
                   if (!part) return null
                   return (
-                    <div className="part-detail">
+                    <div className="mt-2.5">
                       <p>{part.description}</p>
                       {part.tips ? (
                         <p>
@@ -199,6 +208,7 @@ export default function DiagramPage() {
                               <li key={ex}>
                                 <a
                                   href="#"
+                                  className="text-blue-600 underline"
                                   onClick={(e) => {
                                     e.preventDefault()
                                     navigate(`/videos?exercise=${encodeURIComponent(ex)}`)
@@ -224,6 +234,7 @@ export default function DiagramPage() {
                       <li key={ex}>
                         <a
                           href="#"
+                          className="text-blue-600 underline"
                           onClick={(e) => {
                             e.preventDefault()
                             navigate(`/videos?exercise=${encodeURIComponent(ex)}`)

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import muscles from '../data/muscles'
 import videos from '../data/videos'
-import '../pages-css/Videos.css'
 
 const slugify = (s) =>
   String(s)
@@ -92,18 +91,18 @@ export default function Videos() {
   useEffect(() => {
     if (!targetExercise) return
     const id = slugify(targetExercise)
-    // wait a tick for rendering
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       const el = document.getElementById(id)
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 50)
+    }, 200)
+    return () => clearTimeout(timer)
   }, [targetExercise])
 
   return (
-    <div className="videos-page">
-      <h2>Exercise Videos</h2>
+    <div className="p-4">
+      <p className="font-bold text-[2rem] mb-1">Exercise Videos</p>
 
-      <div ref={listRef} className="videos-grid">
+      <div ref={listRef} className="grid grid-cols-2 gap-3 mt-3">
         {exercises.map((ex) => {
           const id = slugify(ex)
           const key = ex?.toString?.().toLowerCase().trim()
@@ -114,37 +113,37 @@ export default function Videos() {
           const yt = getYouTubeId(url)
           const thumb = yt ? thumbFor(yt) : null
           return (
-            <div id={id} key={id} className="video-card">
-              <h3>{ex}</h3>
+            <div id={id} key={id} className="p-3 border border-gray-200 rounded-lg">
+              <h3 className="m-0 mb-2">{ex}</h3>
 
               {yt ? (
-                <div className="video-wrapper">
-                  <div className="video-inner">
+                <div className="flex gap-3 items-center">
+                  <div className="w-full">
                     {playing === yt ? (
-                      <div className="video-embed">
+                      <div className="relative pt-[56.25%]">
                         <iframe
                           title={ex}
                           src={`https://www.youtube.com/embed/${yt}?autoplay=1&rel=0`}
                           frameBorder="0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
-                          className="video-iframe"
+                          className="absolute top-0 left-0 w-full h-full"
                         />
                       </div>
                     ) : (
                       <button
                         onClick={() => setPlaying(yt)}
-                        className="video-thumb-btn"
+                        className="block w-full p-0 border-0 bg-transparent cursor-pointer"
                         aria-label={`Play ${ex}`}
                       >
-                        <div className="video-thumb-container">
+                        <div className="relative">
                           <img
                             src={thumb}
                             alt={`${ex} thumbnail`}
-                            className="video-thumb-img"
+                            className="w-full block rounded-md"
                           />
-                          <div className="video-play-overlay">
-                            <div className="video-play-circle">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
                               <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M8 5v14l11-7z" />
                               </svg>
