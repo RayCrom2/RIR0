@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { LuCalendar } from 'react-icons/lu'
 
-const monthAbbr = new Date().toLocaleString('default', { month: 'short' }).toUpperCase()
+export const monthAbbr = new Date().toLocaleString('default', { month: 'short' }).toUpperCase()
 
 const STORAGE_KEY = 'nutrition_log';
 const DATE_KEY = 'nutrition_date';
