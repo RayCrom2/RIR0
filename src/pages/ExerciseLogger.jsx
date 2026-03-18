@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import muscles from "../data/muscles.js";
 import { LuCalendar } from "react-icons/lu";
 import { monthAbbr } from "./Nutrition.jsx";
+import { useAuth } from "../context/AuthContext";
 
 const ROUTINES_KEY = "exercise_routines";
 
@@ -16,6 +17,7 @@ const ALL_EXERCISES = [
 ].sort();
 
 export default function ExerciseLogger() {
+  const { requireAuth } = useAuth();
   const [view, setView] = useState("select");
 
   // ── routines (persisted)
@@ -43,6 +45,7 @@ export default function ExerciseLogger() {
   const [sessionExs, setSessionExs] = useState([]);
   const [sSearch, setSSearch] = useState("");
   const [sDropdownOpen, setSDropdownOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [ending, setEnding] = useState(false);
   const [saveName, setSaveName] = useState("");
   const sSearchRef = useRef(null);
@@ -81,6 +84,10 @@ export default function ExerciseLogger() {
   function persistRoutines(next) {
     setRoutines(next);
     localStorage.setItem(ROUTINES_KEY, JSON.stringify(next));
+  }
+
+  function showCalendar() {
+    setCalendarOpen((prev) => !prev);
   }
 
   // ── select actions
@@ -214,20 +221,22 @@ export default function ExerciseLogger() {
       setCError("Add at least one exercise.");
       return;
     }
-    const exercises = cExs.map((ex) => ({
-      name: ex.name,
-      unit: ex.unit,
-      sets: ex.sets.map((s) => ({
-        reps: Number(s.reps) || 1,
-        weight: s.weight !== "" ? Number(s.weight) : null,
-        rir: s.rir !== "" ? Number(s.rir) : null,
-      })),
-    }));
-    persistRoutines([
-      ...routines,
-      { id: String(Date.now()), name: cName.trim(), exercises },
-    ]);
-    setView("select");
+    requireAuth(() => {
+      const exercises = cExs.map((ex) => ({
+        name: ex.name,
+        unit: ex.unit,
+        sets: ex.sets.map((s) => ({
+          reps: Number(s.reps) || 1,
+          weight: s.weight !== "" ? Number(s.weight) : null,
+          rir: s.rir !== "" ? Number(s.rir) : null,
+        })),
+      }));
+      persistRoutines([
+        ...routines,
+        { id: String(Date.now()), name: cName.trim(), exercises },
+      ]);
+      setView("select");
+    });
   }
 
   // ── session: search
@@ -317,20 +326,22 @@ export default function ExerciseLogger() {
   }
   function doSaveAsRoutine() {
     if (!saveName.trim()) return;
-    const exercises = sessionExs.map((ex) => ({
-      name: ex.name,
-      unit: ex.unit,
-      sets: ex.sets.map(({ done: _, ...s }) => ({
-        reps: Number(s.reps) || 1,
-        weight: s.weight !== "" ? Number(s.weight) : null,
-        rir: s.rir !== "" ? Number(s.rir) : null,
-      })),
-    }));
-    persistRoutines([
-      ...routines,
-      { id: String(Date.now()), name: saveName.trim(), exercises },
-    ]);
-    finishSession();
+    requireAuth(() => {
+      const exercises = sessionExs.map((ex) => ({
+        name: ex.name,
+        unit: ex.unit,
+        sets: ex.sets.map(({ done: _, ...s }) => ({
+          reps: Number(s.reps) || 1,
+          weight: s.weight !== "" ? Number(s.weight) : null,
+          rir: s.rir !== "" ? Number(s.rir) : null,
+        })),
+      }));
+      persistRoutines([
+        ...routines,
+        { id: String(Date.now()), name: saveName.trim(), exercises },
+      ]);
+      finishSession();
+    });
   }
   function finishSession() {
     setView("select");
@@ -347,11 +358,13 @@ export default function ExerciseLogger() {
         <div style={{ display: "flex" }}>
           <p className="font-bold text-[2rem] mb-1">Exercise Logger</p>
           <button className="relative inline-flex items-center justify-center ml-auto cursor-pointer">
-            <LuCalendar size={45} />
+            <LuCalendar size={45} onClick={showCalendar} />
             <span className="absolute bottom-[15px] text-[11px] font-bold leading-none">
               {monthAbbr}
             </span>
           </button>
+
+          {calendarOpen && <CalendarPopup />}
         </div>
         <p className="text-[#888] mb-6 text-sm">{today}</p>
 
@@ -558,7 +571,9 @@ export default function ExerciseLogger() {
         </div>
         {!ending && (
           <button
-            onClick={() => sessionExs.length === 0 ? finishSession() : setEnding(true)}
+            onClick={() =>
+              sessionExs.length === 0 ? finishSession() : setEnding(true)
+            }
             className="bg-transparent border border-[#e0e0e0] rounded-lg px-4 py-1.5 cursor-pointer text-[13px] text-[#555] font-semibold shrink-0"
           >
             End Session
@@ -721,6 +736,47 @@ export default function ExerciseLogger() {
           />
         ))
       )}
+    </div>
+  );
+}
+
+// ── Calendar popup component
+function CalendarPopup() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = now.getDate();
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg p-4 z-50 w-64">
+      <div className="grid grid-cols-7 mb-1">
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+          <span key={d} className="text-center text-[11px] text-[#aaa] font-semibold">
+            {d}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((d, i) => (
+          <span
+            key={i}
+            className={`text-center text-sm py-1 rounded-full ${
+              d === today
+                ? "bg-[#ff8c42] text-white font-bold"
+                : "text-[#333]"
+            } ${d === null ? "" : "cursor-pointer hover:bg-[#fff8f2]"}`}
+          >
+            {d ?? ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
