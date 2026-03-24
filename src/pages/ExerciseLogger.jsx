@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import muscles from "../data/muscles.js";
 import { LuCalendar } from "react-icons/lu";
 import { monthAbbr } from "./Nutrition.jsx";
+import { useAuth } from "../context/AuthContext";
 
-const ROUTINES_KEY = "exercise_routines";
 
 // Deduplicated list of all exercises from muscles.js
 const ALL_EXERCISES = [
@@ -15,17 +16,140 @@ const ALL_EXERCISES = [
   ),
 ].sort();
 
+// ── Shared exercise card component
+function ExerciseCard({
+  ex,
+  showDone,
+  onUpdateSet,
+  onRemoveSet,
+  onAddSet,
+  onUpdateUnit,
+  onRemove,
+  onToggleDone,
+}) {
+  const colGrid = showDone
+    ? "grid-cols-[32px_40px_1fr_1fr_1fr_24px]"
+    : "grid-cols-[40px_1fr_1fr_1fr_24px]";
+
+  return (
+    <div className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-3">
+      {/* Exercise header */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-bold text-[15px] text-[#222]">{ex.name}</span>
+        <div className="flex items-center gap-2">
+          <select
+            value={ex.unit}
+            onChange={(e) => onUpdateUnit(e.target.value)}
+            className="py-1.5 px-2 text-[13px] cursor-pointer w-16 border border-[#e0e0e0] rounded-lg bg-[#fafafa] outline-none"
+          >
+            <option value="lbs">lbs</option>
+            <option value="kg">kg</option>
+          </select>
+          <button
+            onClick={onRemove}
+            className="bg-transparent border-0 cursor-pointer text-[#ccc] text-base px-1 py-0.5 leading-none"
+            title="Remove exercise"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Column labels */}
+      <div className={`grid ${colGrid} gap-1.5 mb-1`}>
+        {showDone && <span />}
+        <span />
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">
+          REPS
+        </span>
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">
+          WEIGHT
+        </span>
+        <span className="text-[11px] text-[#bbb] font-semibold text-center">
+          RIR
+        </span>
+        <span />
+      </div>
+
+      {/* Set rows */}
+      {ex.sets.map((s, si) => {
+        const done = showDone && s.done;
+        return (
+          <div
+            key={si}
+            className={`grid ${colGrid} gap-1.5 mb-1.5 items-center transition-colors${done ? " bg-[#f0fdf4] rounded-lg px-1 py-0.5" : ""}`}
+          >
+            {showDone && (
+              <button
+                onClick={() => onToggleDone(si)}
+                title={done ? "Mark incomplete" : "Mark complete"}
+                className={
+                  done
+                    ? "w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-0 bg-[#5cb85c]"
+                    : "w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-2 border-[#d0d0d0] bg-transparent"
+                }
+              >
+                {done ? "✓" : ""}
+              </button>
+            )}
+            <span className="text-xs text-[#aaa] font-semibold text-right pr-1">
+              {si + 1}
+            </span>
+            <input
+              type="number"
+              min="1"
+              placeholder="—"
+              value={s.reps}
+              onChange={(e) => onUpdateSet(si, "reps", e.target.value)}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+            />
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              placeholder="—"
+              value={s.weight}
+              onChange={(e) => onUpdateSet(si, "weight", e.target.value)}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+            />
+            <input
+              type="number"
+              min="0"
+              max="10"
+              placeholder="—"
+              value={s.rir}
+              onChange={(e) => onUpdateSet(si, "rir", e.target.value)}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+            />
+            <button
+              onClick={() => onRemoveSet(si)}
+              disabled={ex.sets.length === 1}
+              className="bg-transparent border-0 text-[15px] p-0 leading-none text-[#ccc] cursor-pointer disabled:cursor-default disabled:text-[#eee]"
+              title="Remove set"
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+
+      {/* Add set */}
+      <button
+        onClick={onAddSet}
+        className="mt-1.5 bg-transparent border border-dashed border-[#e0e0e0] rounded-[7px] px-3.5 py-1.5 cursor-pointer text-[13px] text-[#888] hover:border-[#ff8c42] hover:text-[#ff8c42]"
+      >
+        + Add Set
+      </button>
+    </div>
+  );
+}
+
 export default function ExerciseLogger() {
+  const { user, requireAuth } = useAuth();
   const [view, setView] = useState("select");
 
   // ── routines (persisted)
-  const [routines, setRoutines] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(ROUTINES_KEY) || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [routines, setRoutines] = useState([]);
 
   // ── create-routine state
   // cExs shape: [{ name, unit, sets: [{ reps, weight, rir }] }]
@@ -43,6 +167,7 @@ export default function ExerciseLogger() {
   const [sessionExs, setSessionExs] = useState([]);
   const [sSearch, setSSearch] = useState("");
   const [sDropdownOpen, setSDropdownOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [ending, setEnding] = useState(false);
   const [saveName, setSaveName] = useState("");
   const sSearchRef = useRef(null);
@@ -77,10 +202,19 @@ export default function ExerciseLogger() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // ── helpers
-  function persistRoutines(next) {
-    setRoutines(next);
-    localStorage.setItem(ROUTINES_KEY, JSON.stringify(next));
+  // ── load routines from Supabase when user changes
+  useEffect(() => {
+    if (!user) { setRoutines([]); return; }
+    supabase
+      .from("exercise_routines")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at")
+      .then(({ data }) => setRoutines(data || []));
+  }, [user]);
+
+  function showCalendar() {
+    setCalendarOpen((prev) => !prev);
   }
 
   // ── select actions
@@ -131,9 +265,10 @@ export default function ExerciseLogger() {
     setSaveName(r.name);
     setView("session");
   }
-  function deleteRoutine(id) {
-    if (window.confirm("Delete this routine?"))
-      persistRoutines(routines.filter((r) => r.id !== id));
+  async function deleteRoutine(id) {
+    if (!window.confirm("Delete this routine?")) return;
+    await supabase.from("exercise_routines").delete().eq("id", id);
+    setRoutines((prev) => prev.filter((r) => r.id !== id));
   }
 
   // ── create-routine: search
@@ -214,20 +349,25 @@ export default function ExerciseLogger() {
       setCError("Add at least one exercise.");
       return;
     }
-    const exercises = cExs.map((ex) => ({
-      name: ex.name,
-      unit: ex.unit,
-      sets: ex.sets.map((s) => ({
-        reps: Number(s.reps) || 1,
-        weight: s.weight !== "" ? Number(s.weight) : null,
-        rir: s.rir !== "" ? Number(s.rir) : null,
-      })),
-    }));
-    persistRoutines([
-      ...routines,
-      { id: String(Date.now()), name: cName.trim(), exercises },
-    ]);
-    setView("select");
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const exercises = cExs.map((ex) => ({
+        name: ex.name,
+        unit: ex.unit,
+        sets: ex.sets.map((s) => ({
+          reps: Number(s.reps) || 1,
+          weight: s.weight !== "" ? Number(s.weight) : null,
+          rir: s.rir !== "" ? Number(s.rir) : null,
+        })),
+      }));
+      const { data } = await supabase
+        .from("exercise_routines")
+        .insert({ user_id: u.id, name: cName.trim(), exercises })
+        .select()
+        .single();
+      if (data) setRoutines((prev) => [...prev, data]);
+      setView("select");
+    });
   }
 
   // ── session: search
@@ -317,20 +457,25 @@ export default function ExerciseLogger() {
   }
   function doSaveAsRoutine() {
     if (!saveName.trim()) return;
-    const exercises = sessionExs.map((ex) => ({
-      name: ex.name,
-      unit: ex.unit,
-      sets: ex.sets.map(({ done: _, ...s }) => ({
-        reps: Number(s.reps) || 1,
-        weight: s.weight !== "" ? Number(s.weight) : null,
-        rir: s.rir !== "" ? Number(s.rir) : null,
-      })),
-    }));
-    persistRoutines([
-      ...routines,
-      { id: String(Date.now()), name: saveName.trim(), exercises },
-    ]);
-    finishSession();
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const exercises = sessionExs.map((ex) => ({
+        name: ex.name,
+        unit: ex.unit,
+        sets: ex.sets.map(({ done: _, ...s }) => ({
+          reps: Number(s.reps) || 1,
+          weight: s.weight !== "" ? Number(s.weight) : null,
+          rir: s.rir !== "" ? Number(s.rir) : null,
+        })),
+      }));
+      const { data } = await supabase
+        .from("exercise_routines")
+        .insert({ user_id: u.id, name: saveName.trim(), exercises })
+        .select()
+        .single();
+      if (data) setRoutines((prev) => [...prev, data]);
+      finishSession();
+    });
   }
   function finishSession() {
     setView("select");
@@ -344,15 +489,7 @@ export default function ExerciseLogger() {
   if (view === "select")
     return (
       <div className="max-w-[860px] mx-auto px-2">
-        <div style={{ display: "flex" }}>
-          <p className="font-bold text-[2rem] mb-1">Exercise Logger</p>
-          <button className="relative inline-flex items-center justify-center ml-auto cursor-pointer">
-            <LuCalendar size={45} />
-            <span className="absolute bottom-[15px] text-[11px] font-bold leading-none">
-              {monthAbbr}
-            </span>
-          </button>
-        </div>
+        <p className="font-bold text-[2rem] mb-1">Exercise Logger</p>
         <p className="text-[#888] mb-6 text-sm">{today}</p>
 
         <div className="grid grid-cols-2 gap-4 mb-8">
@@ -558,7 +695,9 @@ export default function ExerciseLogger() {
         </div>
         {!ending && (
           <button
-            onClick={() => sessionExs.length === 0 ? finishSession() : setEnding(true)}
+            onClick={() =>
+              sessionExs.length === 0 ? finishSession() : setEnding(true)
+            }
             className="bg-transparent border border-[#e0e0e0] rounded-lg px-4 py-1.5 cursor-pointer text-[13px] text-[#555] font-semibold shrink-0"
           >
             End Session
@@ -721,134 +860,6 @@ export default function ExerciseLogger() {
           />
         ))
       )}
-    </div>
-  );
-}
-
-// ── Shared exercise card component
-function ExerciseCard({
-  ex,
-  showDone,
-  onUpdateSet,
-  onRemoveSet,
-  onAddSet,
-  onUpdateUnit,
-  onRemove,
-  onToggleDone,
-}) {
-  const colGrid = showDone
-    ? "grid-cols-[32px_40px_1fr_1fr_1fr_24px]"
-    : "grid-cols-[40px_1fr_1fr_1fr_24px]";
-
-  return (
-    <div className="bg-white rounded-xl px-5 py-4 shadow-[0_4px_14px_rgba(0,0,0,0.07)] mb-3">
-      {/* Exercise header */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="font-bold text-[15px] text-[#222]">{ex.name}</span>
-        <div className="flex items-center gap-2">
-          <select
-            value={ex.unit}
-            onChange={(e) => onUpdateUnit(e.target.value)}
-            className="py-1.5 px-2 text-[13px] cursor-pointer w-16 border border-[#e0e0e0] rounded-lg bg-[#fafafa] outline-none"
-          >
-            <option value="lbs">lbs</option>
-            <option value="kg">kg</option>
-          </select>
-          <button
-            onClick={onRemove}
-            className="bg-transparent border-0 cursor-pointer text-[#ccc] text-base px-1 py-0.5 leading-none"
-            title="Remove exercise"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {/* Column labels */}
-      <div className={`grid ${colGrid} gap-1.5 mb-1`}>
-        {showDone && <span />}
-        <span />
-        <span className="text-[11px] text-[#bbb] font-semibold text-center">
-          REPS
-        </span>
-        <span className="text-[11px] text-[#bbb] font-semibold text-center">
-          WEIGHT
-        </span>
-        <span className="text-[11px] text-[#bbb] font-semibold text-center">
-          RIR
-        </span>
-        <span />
-      </div>
-
-      {/* Set rows */}
-      {ex.sets.map((s, si) => {
-        const done = showDone && s.done;
-        return (
-          <div
-            key={si}
-            className={`grid ${colGrid} gap-1.5 mb-1.5 items-center transition-colors${done ? " bg-[#f0fdf4] rounded-lg px-1 py-0.5" : ""}`}
-          >
-            {showDone && (
-              <button
-                onClick={() => onToggleDone(si)}
-                title={done ? "Mark incomplete" : "Mark complete"}
-                className={
-                  done
-                    ? "w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-0 bg-[#5cb85c]"
-                    : "w-[26px] h-[26px] rounded-full shrink-0 mx-auto cursor-pointer p-0 flex items-center justify-center text-white text-[13px] font-bold border-2 border-[#d0d0d0] bg-transparent"
-                }
-              >
-                {done ? "✓" : ""}
-              </button>
-            )}
-            <span className="text-xs text-[#aaa] font-semibold text-right pr-1">
-              {si + 1}
-            </span>
-            <input
-              type="number"
-              min="1"
-              placeholder="—"
-              value={s.reps}
-              onChange={(e) => onUpdateSet(si, "reps", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
-            />
-            <input
-              type="number"
-              min="0"
-              step="0.5"
-              placeholder="—"
-              value={s.weight}
-              onChange={(e) => onUpdateSet(si, "weight", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
-            />
-            <input
-              type="number"
-              min="0"
-              max="10"
-              placeholder="—"
-              value={s.rir}
-              onChange={(e) => onUpdateSet(si, "rir", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
-            />
-            <button
-              onClick={() => onRemoveSet(si)}
-              disabled={ex.sets.length === 1}
-              className="bg-transparent border-0 text-[15px] p-0 leading-none text-[#ccc] cursor-pointer disabled:cursor-default disabled:text-[#eee]"
-              title="Remove set"
-            >
-              ✕
-            </button>
-          </div>
-        );
-      })}
-
-      {/* Add set */}
-      <button
-        onClick={onAddSet}
-        className="mt-1.5 bg-transparent border border-dashed border-[#e0e0e0] rounded-[7px] px-3.5 py-1.5 cursor-pointer text-[13px] text-[#888] hover:border-[#ff8c42] hover:text-[#ff8c42]"
-      >
-        + Add Set
-      </button>
     </div>
   );
 }

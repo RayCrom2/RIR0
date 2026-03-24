@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { LuCalendar } from 'react-icons/lu'
+import { LuCalendar } from 'react-icons/lu';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export const monthAbbr = new Date().toLocaleString('default', { month: 'short' }).toUpperCase()
 
-const STORAGE_KEY = 'nutrition_log';
-const DATE_KEY = 'nutrition_date';
 const CARD_ORDER_KEY = 'nutrition_card_order';
 const VISIBLE_KEY = 'nutrition_visible_macros';
-const MY_FOODS_KEY = 'nutrition_my_foods';
 
-const EMPTY_FORM = { name: '', calories: '', protein: '', fat: '', carbs: '', fiber: '', sugar: '' };
+const SERVING_UNITS = ['g', 'oz', 'fl oz', 'ml', 'lb', 'cup', 'tbsp', 'tsp'];
+
+const EMPTY_FORM = { name: '', calories: '', protein: '', fat: '', carbs: '', fiber: '', sugar: '', serving_amount: '', serving_unit: 'g' };
 
 const MACROS = [
   { key: 'calories', label: 'Calories', unit: 'kcal', color: '#ff8c42' },
@@ -25,13 +26,13 @@ function todayStr() {
 }
 
 export default function Nutrition() {
+  const { user, requireAuth } = useAuth();
   const [entries, setEntries] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [saveToMyFoods, setSaveToMyFoods] = useState(false);
-  const [savedFoods, setSavedFoods] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(MY_FOODS_KEY) || '[]'); } catch { return []; }
-  });
+  const [savedFoods, setSavedFoods] = useState([]);
   const [myFoodsOpen, setMyFoodsOpen] = useState(false);
+  const [libraryAmounts, setLibraryAmounts] = useState({});
+  const [savedFeedback, setSavedFeedback] = useState(false);
   const [error, setError] = useState('');
   const [cardOrder, setCardOrder] = useState(() => {
     try {
@@ -105,28 +106,26 @@ export default function Nutrition() {
     setDragOverIndex(null);
   }
 
-  // Load entries, reset if it's a new day
   useEffect(() => {
-    const savedDate = localStorage.getItem(DATE_KEY);
-    const today = todayStr();
-    if (savedDate !== today) {
-      localStorage.setItem(DATE_KEY, today);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-      setEntries([]);
-    } else {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        setEntries(saved);
-      } catch {
-        setEntries([]);
-      }
-    }
-  }, []);
+    if (!user) { setEntries([]); return; }
+    supabase
+      .from('nutrition_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('logged_at', todayStr())
+      .order('created_at')
+      .then(({ data }) => setEntries(data || []));
+  }, [user]);
 
-  function persist(next) {
-    setEntries(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }
+  useEffect(() => {
+    if (!user) { setSavedFoods([]); return; }
+    supabase
+      .from('custom_foods')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name')
+      .then(({ data }) => setSavedFoods(data || []));
+  }, [user]);
 
   function handleChange(e) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -139,54 +138,97 @@ export default function Nutrition() {
     if (!form.calories || isNaN(Number(form.calories)) || Number(form.calories) < 0) {
       setError('Enter a valid calorie amount.'); return;
     }
-    const now = new Date();
-    const entry = {
-      id: Date.now(),
-      time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-      name: form.name.trim(),
-      calories: Number(form.calories) || 0,
-      protein: Number(form.protein) || 0,
-      fat: Number(form.fat) || 0,
-      carbs: Number(form.carbs) || 0,
-      fiber: Number(form.fiber) || 0,
-      sugar: Number(form.sugar) || 0,
-    };
-    persist([...entries, entry]);
-    if (saveToMyFoods) {
-      const { id: _id, ...food } = entry;
-      const already = savedFoods.some(f => f.name.toLowerCase() === food.name.toLowerCase());
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const now = new Date();
+      const entry = {
+        user_id: u.id,
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        food_name: form.name.trim(),
+        calories: Number(form.calories) || 0,
+        protein: Number(form.protein) || 0,
+        fat: Number(form.fat) || 0,
+        carbs: Number(form.carbs) || 0,
+        fiber: Number(form.fiber) || 0,
+        sugar: Number(form.sugar) || 0,
+        serving_amount: form.serving_amount !== '' ? Number(form.serving_amount) : null,
+        serving_unit: form.serving_unit || 'g',
+      };
+      const { data } = await supabase.from('nutrition_logs').insert(entry).select().single();
+      if (data) setEntries(prev => [...prev, data]);
+      setForm(EMPTY_FORM);
+    });
+  }
+
+  function handleSaveToMyFoods() {
+    if (!form.name.trim()) { setError('Food name is required.'); return; }
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const already = savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase());
       if (!already) {
-        const next = [...savedFoods, food];
-        setSavedFoods(next);
-        localStorage.setItem(MY_FOODS_KEY, JSON.stringify(next));
+        const food = {
+          user_id: u.id,
+          name: form.name.trim(),
+          calories: Number(form.calories) || 0,
+          protein: Number(form.protein) || 0,
+          fat: Number(form.fat) || 0,
+          carbs: Number(form.carbs) || 0,
+          fiber: Number(form.fiber) || 0,
+          sugar: Number(form.sugar) || 0,
+          serving_amount: form.serving_amount !== '' ? Number(form.serving_amount) : null,
+          serving_unit: form.serving_unit || 'g',
+        };
+        const { data } = await supabase.from('custom_foods').insert(food).select().single();
+        if (data) setSavedFoods(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       }
-    }
-    setSaveToMyFoods(false);
-    setForm(EMPTY_FORM);
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 1500);
+    });
   }
 
-  function handleDelete(id) {
-    persist(entries.filter(e => e.id !== id));
+  async function handleDelete(id) {
+    await supabase.from('nutrition_logs').delete().eq('id', id);
+    setEntries(prev => prev.filter(e => e.id !== id));
   }
 
-  function handleClearAll() {
-    if (window.confirm('Clear all entries for today?')) persist([]);
+  async function handleClearAll() {
+    if (!window.confirm('Clear all entries for today?')) return;
+    if (!user) return;
+    await supabase.from('nutrition_logs').delete().eq('user_id', user.id).eq('logged_at', todayStr());
+    setEntries([]);
   }
 
   function handleAddFromLibrary(food) {
-    const now = new Date();
-    const entry = {
-      ...food,
-      id: Date.now(),
-      time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-    };
-    persist([...entries, entry]);
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const customAmount = Number(libraryAmounts[food.name] ?? food.serving_amount);
+      const baseAmount = Number(food.serving_amount);
+      const scale = baseAmount > 0 && customAmount > 0 ? customAmount / baseAmount : 1;
+      const now = new Date();
+      const entry = {
+        user_id: u.id,
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+        food_name: food.name,
+        calories: Math.round(food.calories * scale),
+        protein: Math.round(food.protein * scale * 10) / 10,
+        fat: Math.round(food.fat * scale * 10) / 10,
+        carbs: Math.round(food.carbs * scale * 10) / 10,
+        fiber: Math.round(food.fiber * scale * 10) / 10,
+        sugar: Math.round(food.sugar * scale * 10) / 10,
+        serving_amount: customAmount || food.serving_amount,
+        serving_unit: food.serving_unit,
+      };
+      const { data } = await supabase.from('nutrition_logs').insert(entry).select().single();
+      if (data) setEntries(prev => [...prev, data]);
+      setLibraryAmounts(prev => { const next = { ...prev }; delete next[food.name]; return next; });
+    });
   }
 
-  function handleDeleteSaved(name) {
-    const next = savedFoods.filter(f => f.name !== name);
-    setSavedFoods(next);
-    localStorage.setItem(MY_FOODS_KEY, JSON.stringify(next));
+  async function handleDeleteSaved(id) {
+    await supabase.from('custom_foods').delete().eq('id', id);
+    setSavedFoods(prev => prev.filter(f => f.id !== id));
   }
 
   const totals = MACROS.reduce((acc, m) => {
@@ -345,6 +387,25 @@ export default function Nutrition() {
               onChange={handleChange}
               style={inputStyle({ flex: '1 1 90px' })}
             />
+            <div style={{ display: 'flex', flex: '1 1 150px', gap: 0 }}>
+              <input
+                name="serving_amount"
+                type="number"
+                min="0"
+                placeholder="Serving"
+                value={form.serving_amount}
+                onChange={handleChange}
+                style={inputStyle({ flex: 1, borderRadius: '8px 0 0 8px', borderRight: 'none' })}
+              />
+              <select
+                name="serving_unit"
+                value={form.serving_unit}
+                onChange={handleChange}
+                style={{ ...inputStyle(), borderRadius: '0 8px 8px 0', padding: '9px 8px', cursor: 'pointer' }}
+              >
+                {SERVING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
           </div>
           {error && <p style={{ color: '#e05c5c', margin: '0 0 10px', fontSize: 13 }}>{error}</p>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -355,15 +416,25 @@ export default function Nutrition() {
             }}>
               + Add Entry
             </button>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#666', cursor: 'pointer', userSelect: 'none' }}>
-              <input
-                type="checkbox"
-                checked={saveToMyFoods}
-                onChange={e => setSaveToMyFoods(e.target.checked)}
-                style={{ accentColor: '#ff8c42', width: 15, height: 15, cursor: 'pointer' }}
-              />
-              Save to My Foods
-            </label>
+            {(() => {
+              const alreadySaved = savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase());
+              return (
+                <button
+                  type="button"
+                  onClick={alreadySaved ? undefined : handleSaveToMyFoods}
+                  disabled={alreadySaved}
+                  style={{
+                    background: savedFeedback ? '#5cb85c' : 'none',
+                    color: savedFeedback ? '#fff' : alreadySaved ? '#aaa' : '#888',
+                    border: '1px solid',
+                    borderColor: alreadySaved ? '#e0e0e0' : savedFeedback ? '#5cb85c' : '#e0e0e0',
+                    borderRadius: 8, padding: '8px 16px', cursor: alreadySaved ? 'default' : 'pointer', fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  {alreadySaved ? '★ Already Saved' : savedFeedback ? '★ Saved!' : '☆ Save to My Foods'}
+                </button>
+              );
+            })()}
           </div>
         </form>
       </div>
@@ -389,7 +460,7 @@ export default function Nutrition() {
           ) : (
             <div style={{ padding: '0 16px 16px' }}>
               {savedFoods.map(food => (
-                <div key={food.name} style={{
+                <div key={food.id} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   padding: '9px 10px', borderRadius: 8, marginBottom: 6,
                   background: '#fafafa', border: '1px solid #f0f0f0',
@@ -403,7 +474,21 @@ export default function Nutrition() {
                       {food.fat > 0 && ` · ${food.fat}g fat`}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                    {food.serving_amount && (
+                      <div style={{ display: 'flex' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          value={libraryAmounts[food.name] ?? food.serving_amount}
+                          onChange={e => setLibraryAmounts(prev => ({ ...prev, [food.name]: e.target.value }))}
+                          style={{ ...inputStyle(), width: 60, borderRadius: '6px 0 0 6px', borderRight: 'none', padding: '4px 6px', fontSize: 12 }}
+                        />
+                        <span style={{ border: '1px solid #e0e0e0', borderLeft: 'none', borderRadius: '0 6px 6px 0', padding: '4px 7px', fontSize: 12, color: '#888', background: '#fafafa', display: 'flex', alignItems: 'center' }}>
+                          {food.serving_unit || 'g'}
+                        </span>
+                      </div>
+                    )}
                     <button
                       onClick={() => handleAddFromLibrary(food)}
                       style={{
@@ -413,7 +498,7 @@ export default function Nutrition() {
                       }}
                     >+ Add</button>
                     <button
-                      onClick={() => handleDeleteSaved(food.name)}
+                      onClick={() => handleDeleteSaved(food.id)}
                       style={{
                         background: 'none', border: 'none', cursor: 'pointer',
                         color: '#ccc', fontSize: 16, lineHeight: 1, padding: '4px 6px',
@@ -452,6 +537,7 @@ export default function Nutrition() {
               <thead>
                 <tr style={{ background: '#fafafa' }}>
                   <th style={thStyle({ textAlign: 'left' })}>Food</th>
+                  <th style={thStyle({ color: '#aaa' })}>Serving</th>
                   {visibleMacroList.map(m => (
                     <th key={m.key} style={thStyle()}>{m.label}<br /><span style={{ fontWeight: 400, color: '#aaa', fontSize: 11 }}>{m.unit}</span></th>
                   ))}
@@ -462,14 +548,17 @@ export default function Nutrition() {
               <tbody>
                 {entries.map((entry, i) => (
                   <tr key={entry.id} style={{ borderTop: '1px solid #f0f0f0', background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                    <td style={{ padding: '10px 16px', fontWeight: 500 }}>{entry.name}</td>
+                    <td style={{ padding: '10px 16px', fontWeight: 500 }}>{entry.food_name}</td>
+                    <td style={{ padding: '10px 16px', textAlign: 'center', color: '#aaa', fontSize: 12, whiteSpace: 'nowrap' }}>
+                      {entry.serving_amount ? `${entry.serving_amount} ${entry.serving_unit || ''}` : '—'}
+                    </td>
                     {visibleMacroList.map(m => (
                       <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', color: m.key === 'calories' ? '#ff8c42' : '#333', fontWeight: m.key === 'calories' ? 600 : 400 }}>
                         {entry[m.key] > 0 ? (m.key === 'calories' ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: '#ddd' }}>—</span>}
                       </td>
                     ))}
                     <td style={{ padding: '10px 16px', textAlign: 'center', color: '#aaa', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {entry.time || '—'}
+                      {entry.logged_time || '—'}
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <button onClick={() => handleDelete(entry.id)} style={{
@@ -483,6 +572,7 @@ export default function Nutrition() {
               <tfoot>
                 <tr style={{ borderTop: '2px solid #eee', background: '#fff8f3' }}>
                   <td style={{ padding: '10px 16px', fontWeight: 700, color: '#555' }}>Total</td>
+                  <td />
                   {visibleMacroList.map(m => (
                     <td key={m.key} style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: m.color }}>
                       {m.key === 'calories' ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
