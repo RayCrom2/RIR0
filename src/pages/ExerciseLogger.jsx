@@ -60,10 +60,10 @@ function ExerciseCard({
         {showDone && <span />}
         <span />
         <span className="text-[11px] text-[#bbb] font-semibold text-center">
-          REPS
+          REPS *
         </span>
         <span className="text-[11px] text-[#bbb] font-semibold text-center">
-          WEIGHT
+          WEIGHT *
         </span>
         <span className="text-[11px] text-[#bbb] font-semibold text-center">
           RIR
@@ -98,9 +98,10 @@ function ExerciseCard({
             <input
               type="number"
               min="1"
+              step="1"
               placeholder="—"
               value={s.reps}
-              onChange={(e) => onUpdateSet(si, "reps", e.target.value)}
+              onChange={(e) => !done && onUpdateSet(si, "reps", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <input
@@ -109,7 +110,7 @@ function ExerciseCard({
               step="0.5"
               placeholder="—"
               value={s.weight}
-              onChange={(e) => onUpdateSet(si, "weight", e.target.value)}
+              onChange={(e) => !done && onUpdateSet(si, "weight", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <input
@@ -118,7 +119,7 @@ function ExerciseCard({
               max="10"
               placeholder="—"
               value={s.rir}
-              onChange={(e) => onUpdateSet(si, "rir", e.target.value)}
+              onChange={(e) => !done && onUpdateSet(si, "rir", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <button
@@ -153,7 +154,7 @@ export default function ExerciseLogger() {
 
   // ── create-routine state
   // cExs shape: [{ name, unit, sets: [{ reps, weight, rir }] }]
-  const [cName, setCName] = useState("");
+  const [cName, setRName] = useState("");
   const [cExs, setCExs] = useState([]);
   const [cSearch, setCSearch] = useState("");
   const [cDropdownOpen, setCDropdownOpen] = useState(false);
@@ -218,8 +219,8 @@ export default function ExerciseLogger() {
   }
 
   // ── select actions
-  function goCreate() {
-    setCName("");
+  function goCreateRoutine() {
+    setRName("");
     setCExs([]);
     setCSearch("");
     setCDropdownOpen(false);
@@ -243,19 +244,19 @@ export default function ExerciseLogger() {
     const initialExs = r.exercises.map((ex) => {
       const sets = Array.isArray(ex.sets)
         ? ex.sets.map((s) => ({
-            reps: String(s.reps != null ? s.reps : ""),
-            weight: String(s.weight != null ? s.weight : ""),
-            rir: String(s.rir != null ? s.rir : ""),
-            done: false,
-          }))
+          reps: String(s.reps != null ? s.reps : ""),
+          weight: String(s.weight != null ? s.weight : ""),
+          rir: String(s.rir != null ? s.rir : ""),
+          done: false,
+        }))
         : [
-            {
-              reps: String(ex.reps || ""),
-              weight: String(ex.weight != null ? ex.weight : ""),
-              rir: String(ex.rir != null ? ex.rir : ""),
-              done: false,
-            },
-          ];
+          {
+            reps: String(ex.reps || ""),
+            weight: String(ex.weight != null ? ex.weight : ""),
+            rir: String(ex.rir != null ? ex.rir : ""),
+            done: false,
+          },
+        ];
       return { name: ex.name, unit: ex.unit || "lbs", sets };
     });
     setSessionExs(initialExs);
@@ -274,8 +275,8 @@ export default function ExerciseLogger() {
   // ── create-routine: search
   const cSearchResults = cSearch.trim()
     ? ALL_EXERCISES.filter((ex) =>
-        ex.toLowerCase().includes(cSearch.toLowerCase()),
-      )
+      ex.toLowerCase().includes(cSearch.toLowerCase()),
+    )
     : [];
 
   function cAddExercise(name) {
@@ -373,8 +374,8 @@ export default function ExerciseLogger() {
   // ── session: search
   const sSearchResults = sSearch.trim()
     ? ALL_EXERCISES.filter((ex) =>
-        ex.toLowerCase().includes(sSearch.toLowerCase()),
-      )
+      ex.toLowerCase().includes(sSearch.toLowerCase()),
+    )
     : [];
 
   function sAddExercise(name) {
@@ -477,7 +478,15 @@ export default function ExerciseLogger() {
       finishSession();
     });
   }
-  function finishSession() {
+  async function finishSession() {
+    const { data: { user: u } } = await supabase.auth.getUser();
+    await supabase.from('workout_sessions').insert({
+      user_id: u.id,
+      name: sessionName,
+      exercises: sessionExs,  // includes done booleans per set
+      completed_at: new Date().toISOString(),
+  });
+
     setView("select");
     setEnding(false);
     setSessionExs([]);
@@ -494,7 +503,7 @@ export default function ExerciseLogger() {
 
         <div className="grid grid-cols-2 gap-4 mb-8">
           <button
-            onClick={goCreate}
+            onClick={goCreateRoutine}
             className="bg-white border-2 border-dashed border-[#e0e0e0] rounded-xl p-7 cursor-pointer text-left shadow-sm hover:border-[#ff8c42]"
           >
             <div className="text-[26px] mb-2.5">📋</div>
@@ -590,7 +599,7 @@ export default function ExerciseLogger() {
           <input
             value={cName}
             onChange={(e) => {
-              setCName(e.target.value);
+              setRName(e.target.value);
               setCError("");
             }}
             placeholder="e.g. Push Day, Full Body, Upper/Lower…"
