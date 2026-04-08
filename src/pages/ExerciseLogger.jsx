@@ -4,6 +4,7 @@ import muscles from "../data/muscles.js";
 import { LuCalendar } from "react-icons/lu";
 import { monthAbbr } from "./Nutrition.jsx";
 import { useAuth } from "../context/AuthContext";
+import WorkoutHistoryCard from "../components/WorkoutHistoryCard.jsx";
 
 
 // Deduplicated list of all exercises from muscles.js
@@ -151,6 +152,8 @@ export default function ExerciseLogger() {
 
   // ── routines (persisted)
   const [routines, setRoutines] = useState([]);
+  // ── workout history
+  const [pastWorkouts, setPastWorkouts] = useState([]);
 
   // ── create-routine state
   // cExs shape: [{ name, unit, sets: [{ reps, weight, rir }] }]
@@ -214,6 +217,17 @@ export default function ExerciseLogger() {
       .then(({ data }) => setRoutines(data || []));
   }, [user]);
 
+  // ── load past workouts from Supabase when user changes
+  useEffect(() => {
+    if (!user) { setPastWorkouts([]); return; }
+    supabase
+      .from("workout_sessions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("completed_at", { ascending: false })
+      .then(({ data }) => setPastWorkouts(data || []));
+  }, [user]);
+
   function showCalendar() {
     setCalendarOpen((prev) => !prev);
   }
@@ -270,6 +284,11 @@ export default function ExerciseLogger() {
     if (!window.confirm("Delete this routine?")) return;
     await supabase.from("exercise_routines").delete().eq("id", id);
     setRoutines((prev) => prev.filter((r) => r.id !== id));
+  }
+  async function deleteWorkout(id) {
+    if (!window.confirm("Delete this workout?")) return;
+    await supabase.from("workout_sessions").delete().eq("id", id);
+    setPastWorkouts((prev) => prev.filter((w) => w.id !== id));
   }
 
   // ── create-routine: search
@@ -485,8 +504,7 @@ export default function ExerciseLogger() {
       name: sessionName,
       exercises: sessionExs,  // includes done booleans per set
       completed_at: new Date().toISOString(),
-  });
-
+    });
     setView("select");
     setEnding(false);
     setSessionExs([]);
@@ -569,6 +587,87 @@ export default function ExerciseLogger() {
             </div>
           ))
         )}
+
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[13px] font-semibold text-[#888] uppercase tracking-[0.05em]">
+            Past Workouts
+          </span>
+          <span className="text-xs text-[#ccc]">({pastWorkouts.length})</span>
+        </div>
+
+        {pastWorkouts.length === 0 ? (
+          <div className="bg-white rounded-xl py-9 text-center text-[#bbb] text-sm shadow-sm">
+            No routines yet — create your first one above.
+          </div>
+        ) : (
+          pastWorkouts.map((w) => (
+            <WorkoutHistoryCard key={w.id} session={w} onDelete={deleteWorkout}/>
+            // <div
+            //   key={w.id}
+            //   className="bg-white rounded-xl px-5 py-4 mb-2.5 shadow-sm flex items-center justify-between gap-3"
+            // >
+            //   <div className="min-w-0">
+            //     <button
+            //       onClick={() => setPastWorkoutOpen((w) => !w)}
+            //       style={{
+            //         width: "100%",
+            //         background: "none",
+            //         border: "none",
+            //         cursor: "pointer",
+            //         display: "flex",
+            //         justifyContent: "space-between",
+            //         alignItems: "center",
+            //         padding: "14px 20px",
+            //         fontSize: 15,
+            //         fontWeight: 600,
+            //         color: "#333",
+            //       }}
+            //     >
+            //       <span>
+            //         {w.name}
+            //         <span
+            //           style={{
+            //             fontSize: 12,
+            //             fontWeight: 400,
+            //             color: "#aaa",
+            //             marginLeft: 6,
+            //           }}
+            //         >
+            //           {w.exercises.length} exercise
+            //           {w.exercises.length !== 1 ? "s" : ""}:{" "}
+            //           {w.exercises.map((e) => e.name).join(", ")}
+            //         </span>
+            //       </span>
+            //       <span style={{ fontSize: 12, color: "#aaa" }}>
+            //         {myFoodsOpen ? "▲" : "▼"}
+            //       </span>
+            //     </button>
+            //     {/* <div className="font-bold text-[15px]">{w.name}</div> */}
+            //     <div className="text-xs text-[#aaa] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+            //       {w.exercises.length} exercise
+            //       {w.exercises.length !== 1 ? "s" : ""}:{" "}
+            //       {w.exercises.map((e) => e.name).join(", ")}
+            //     </div>
+            //   </div>
+            //   <div className="flex gap-2 shrink-0">
+            //     <button
+            //       onClick={() => goRoutineSession(w)}
+            //       className="bg-[#ff8c42] text-white border-0 rounded-lg px-4 py-1.5 cursor-pointer font-semibold text-[13px]"
+            //     >
+            //       ▶ Start
+            //     </button>
+            //     <button
+            //       onClick={() => deleteWorkout(w.id)}
+            //       className="bg-transparent border-0 cursor-pointer text-[#ccc] text-base px-1.5 py-1"
+            //       title="Delete routine"
+            //     >
+            //       ✕
+            //     </button>
+            //   </div>
+            // </div>
+          ))
+        )}
+
       </div>
     );
 
