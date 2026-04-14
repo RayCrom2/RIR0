@@ -53,6 +53,8 @@ export default function DiagramPage() {
     if (!root) return;
 
     const onClickCapture = (e) => {
+      // ignore clicks on the info panel
+      if (e.target.closest('.info-panel')) return;
       const slug = extractSlug(e);
       if (slug) setSelected(slug);
       else setSelected(null);
@@ -160,7 +162,7 @@ export default function DiagramPage() {
         </div>
 
         <div className="sticky top-4 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
-          <div className="bg-white p-3 rounded-lg flex-1 shadow-[0_6px_18px_rgba(0,0,0,0.06)]">
+          <div className="info-panel bg-white p-3 rounded-lg flex-1 shadow-[0_6px_18px_rgba(0,0,0,0.06)]">
             <h2>
               <strong>{displayName}</strong>
             </h2>
