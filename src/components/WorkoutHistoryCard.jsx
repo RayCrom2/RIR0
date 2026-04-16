@@ -1,26 +1,36 @@
 import { useState, useEffect } from "react";
 
-const imageCache = {};
+let exerciseDataCache = null;
+async function loadExerciseData() {
+    if (exerciseDataCache) return exerciseDataCache;
+    try {
+        const pages = await Promise.all(
+            [0, 100, 200, 300, 400, 500, 600, 700, 800].map((offset) =>
+                fetch(`https://wger.de/api/v2/exerciseinfo/?format=json&limit=100&offset=${offset}`)
+                    .then((r) => r.json())
+            )
+        );
+        const imageMap = {};
+        const seen = new Set();
+        for (const json of pages) {
+            for (const e of (json.results || [])) {
+                const name = (e.translations || []).find((t) => t.language === 2)?.name;
+                if (!name || seen.has(name)) continue;
+                seen.add(name);
+                const img = (e.images || []).find((i) => i.is_main) || e.images?.[0];
+                imageMap[name.toLowerCase()] = img ? `https://wger.de${img.image}` : null;
+            }
+        }
+        exerciseDataCache = { imageMap };
+        return exerciseDataCache;
+    } catch {
+        return { imageMap: {} };
+    }
+}
 
 async function fetchWgerImage(exerciseName) {
-    const key = exerciseName.toLowerCase();
-    if (key in imageCache) return imageCache[key];
-
-    // Strip parenthetical modifiers e.g. "Russian twist (light)" → "Russian twist"
-    const term = exerciseName.replace(/\s*\(.*?\)\s*/g, '').trim();
-    try {
-        const res = await fetch(
-            `https://wger.de/api/v2/exercise/search/?term=${encodeURIComponent(term)}&language=english&format=json`
-        );
-        const json = await res.json();
-        const image = json.suggestions?.[0]?.data?.image;
-        const url = image ? `https://wger.de${image}` : null;
-        imageCache[key] = url;
-        return url;
-    } catch {
-        imageCache[key] = null;
-        return null;
-    }
+    const { imageMap } = await loadExerciseData();
+    return imageMap[exerciseName.toLowerCase()] ?? null;
 }
 
 export default function WorkoutHistoryCard({ session, onDelete }) {
@@ -58,6 +68,11 @@ export default function WorkoutHistoryCard({ session, onDelete }) {
                         }}
                     >
                         <span className="font-bold text-[18px]">{session.name}</span>
+                        {session.completed_at && (
+                            <span style={{ fontSize: 12, color: "#aaa", fontWeight: 400, marginLeft: "auto", paddingRight: 12 }}>
+                                {new Date(session.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </span>
+                        )}
                         <span style={{ fontSize: 12, color: "#aaa" }}>{open ? "▲" : "▼"}</span>
                     </button>
                     {open ? null :
