@@ -42,7 +42,9 @@ export default function App() {
           <NavLink to="/exerciselogger">Exercise Logger</NavLink>
           <NavAuth />
         </nav>
-        <p className="font-bold text-[2rem] mb-1">AIOFitness</p>
+        <p className="font-bold text-[2rem] mb-1">
+          RIR<span style={{ color: "red" }}>0</span>
+        </p>
 
         <Routes>
           <Route path="/" element={<div><h2>Welcome to AIOFitness</h2><p>Select a page from the navigation above.</p></div>} />

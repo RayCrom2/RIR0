@@ -72,6 +72,8 @@ export default function Nutrition() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [savedFoods, setSavedFoods] = useState([]);
   const [myFoodsOpen, setMyFoodsOpen] = useState(true);
+  const [myFoodsSearch, setMyFoodsSearch] = useState("");
+  const [myFoodsSort, setMyFoodsSort] = useState("name_asc");
   const [libraryAmounts, setLibraryAmounts] = useState({});
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [error, setError] = useState("");
@@ -107,6 +109,23 @@ export default function Nutrition() {
   );
   const visibleMacroList = MACROS.filter((m) => visibleMacros.has(m.key));
 
+  const filteredSortedFoods = (() => {
+    const q = myFoodsSearch.trim().toLowerCase();
+    let list = q ? savedFoods.filter((f) => f.name.toLowerCase().includes(q)) : [...savedFoods];
+    switch (myFoodsSort) {
+      case "name_asc":  list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case "name_desc": list.sort((a, b) => b.name.localeCompare(a.name)); break;
+      case "protein_cal": list.sort((a, b) => ((b.protein || 0) / (b.calories || 1)) - ((a.protein || 0) / (a.calories || 1))); break;
+      case "calories": list.sort((a, b) => (b.calories || 0) - (a.calories || 0)); break;
+      case "protein":  list.sort((a, b) => (b.protein || 0) - (a.protein || 0)); break;
+      case "fat":      list.sort((a, b) => (b.fat || 0) - (a.fat || 0)); break;
+      case "carbs":    list.sort((a, b) => (b.carbs || 0) - (a.carbs || 0)); break;
+      case "sugar":    list.sort((a, b) => (b.sugar || 0) - (a.sugar || 0)); break;
+      case "fiber":    list.sort((a, b) => (b.fiber || 0) - (a.fiber || 0)); break;
+    }
+    return list;
+  })();
+
   useEffect(() => {
     function handleClickOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target))
@@ -128,6 +147,7 @@ export default function Nutrition() {
         next.add(key);
       }
       localStorage.setItem(VISIBLE_KEY, JSON.stringify([...next]));
+      saveMacroPrefs(cardOrder, next);
       return next;
     });
   }
@@ -148,6 +168,7 @@ export default function Nutrition() {
     next.splice(i, 0, moved);
     setCardOrder(next);
     localStorage.setItem(CARD_ORDER_KEY, JSON.stringify(next));
+    saveMacroPrefs(next, visibleMacros);
     setDragIndex(null);
     setDragOverIndex(null);
   }
@@ -187,6 +208,32 @@ export default function Nutrition() {
       .order("name")
       .then(({ data }) => setSavedFoods(data || []));
   }, [user]);
+
+  // ── load macro preferences from DB
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("user_preferences")
+      .select("nutrition_card_order, nutrition_visible_macros")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        if (Array.isArray(data.nutrition_card_order) && data.nutrition_card_order.length === MACROS.length)
+          setCardOrder(data.nutrition_card_order);
+        if (Array.isArray(data.nutrition_visible_macros))
+          setVisibleMacros(new Set(data.nutrition_visible_macros));
+      });
+  }, [user]);
+
+  async function saveMacroPrefs(order, visible) {
+    if (!user) { console.warn("saveMacroPrefs: no user"); return; }
+    const { error } = await supabase.from("user_preferences").upsert(
+      { user_id: user.id, nutrition_card_order: order, nutrition_visible_macros: [...visible] },
+      { onConflict: "user_id" }
+    );
+    if (error) console.error("saveMacroPrefs error:", error);
+  }
 
   function handleChange(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -985,7 +1032,36 @@ export default function Nutrition() {
             </p>
           ) : (
             <div style={{ padding: "0 16px 16px" }}>
-              {savedFoods.map((food) => (
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input
+                  type="text"
+                  value={myFoodsSearch}
+                  onChange={(e) => setMyFoodsSearch(e.target.value)}
+                  placeholder="Search saved foods…"
+                  style={{ flex: 1, padding: "6px 10px", fontSize: 13, border: "1px solid #e0e0e0", borderRadius: 7, outline: "none", background: "#fafafa" }}
+                />
+                <select
+                  value={myFoodsSort}
+                  onChange={(e) => setMyFoodsSort(e.target.value)}
+                  style={{ padding: "6px 8px", fontSize: 12, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: "pointer", outline: "none", color: "#555" }}
+                >
+                  <option value="name_asc">Name A→Z</option>
+                  <option value="name_desc">Name Z→A</option>
+                  <option value="protein_cal">Protein / Cal ratio</option>
+                  <option value="calories">Highest Calories</option>
+                  <option value="protein">Highest Protein</option>
+                  <option value="fat">Highest Fat</option>
+                  <option value="carbs">Highest Carbs</option>
+                  <option value="sugar">Highest Sugar</option>
+                  <option value="fiber">Highest Fiber</option>
+                </select>
+              </div>
+              {filteredSortedFoods.length === 0 && (
+                <p style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "12px 0", margin: 0 }}>
+                  No foods match your search.
+                </p>
+              )}
+              {filteredSortedFoods.map((food) => (
                 <div
                   key={food.id}
                   style={{
