@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { LuCalendar } from "react-icons/lu";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
+import UsdaNutrientCard from "../components/UsdaNutrientCard";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -77,6 +78,7 @@ export default function Nutrition() {
   const [myFoodsSort, setMyFoodsSort] = useState("name_asc");
   const [libraryAmounts, setLibraryAmounts] = useState({});
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
   const [visibleMacros, setVisibleMacros] = useState(() => {
     try {
@@ -90,11 +92,20 @@ export default function Nutrition() {
   const [usdaResults, setUsdaResults] = useState([]);
   const [usdaLoading, setUsdaLoading] = useState(false);
   const [usdaOpen, setUsdaOpen] = useState(false);
+  const [hoveredFood, setHoveredFood] = useState(null);
+  const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
+  const [servingInput, setServingInput] = useState("");
   const menuRef = useRef(null);
   const usdaRef = useRef(null);
   const usdaDebounce = useRef(null);
 
   const visibleMacroList = MACROS.filter((m) => visibleMacros.has(m.key));
+
+  const usdaScale = selectedUsdaFood
+    ? selectedUsdaFood.servingSize
+      ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
+      : (Number(servingInput) || 1)
+    : 1;
 
   const filteredSortedFoods = (() => {
     const q = myFoodsSearch.trim().toLowerCase();
@@ -237,28 +248,46 @@ export default function Nutrition() {
   }
 
   function applyUSDAFood(food) {
-    const get = (num) => {
-      const n = food.foodNutrients?.find((n) => n.nutrientNumber === num);
-      return n ? String(Math.round(n.value * 10) / 10) : "";
-    };
-    const rawUnit = (food.servingSizeUnit || "G").toUpperCase();
-    const unit = USDA_UNIT_MAP[rawUnit] || "g";
-    setForm((f) => ({
-      ...f,
-      name: food.description,
-      calories: get(USDA_NUTRIENTS.calories),
-      protein: get(USDA_NUTRIENTS.protein),
-      fat: get(USDA_NUTRIENTS.fat),
-      carbs: get(USDA_NUTRIENTS.carbs),
-      fiber: get(USDA_NUTRIENTS.fiber),
-      sugar: get(USDA_NUTRIENTS.sugar),
-      serving_amount: food.servingSize
-        ? String(food.servingSize)
-        : f.serving_amount,
-      serving_unit: unit,
-    }));
+    setSelectedUsdaFood(food);
+    setServingInput(food.servingSize ? String(food.servingSize) : "1");
     setUsdaOpen(false);
     setUsdaResults([]);
+    setHoveredFood(null);
+  }
+
+  function handleAddFromUsda() {
+    if (!selectedUsdaFood) return;
+    const scale = selectedUsdaFood.servingSize
+      ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
+      : (Number(servingInput) || 1);
+    const get = (num) => {
+      const n = selectedUsdaFood.foodNutrients?.find((n) => n.nutrientNumber === num);
+      return n ? Math.round(n.value * scale * 10) / 10 : 0;
+    };
+    const rawUnit = (selectedUsdaFood.servingSizeUnit || "G").toUpperCase();
+    const unit = USDA_UNIT_MAP[rawUnit] || "g";
+    requireAuth(async () => {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const now = new Date();
+      const entry = {
+        user_id: u.id,
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        food_name: selectedUsdaFood.description,
+        calories: Math.round(get(USDA_NUTRIENTS.calories)),
+        protein: get(USDA_NUTRIENTS.protein),
+        fat: get(USDA_NUTRIENTS.fat),
+        carbs: get(USDA_NUTRIENTS.carbs),
+        fiber: get(USDA_NUTRIENTS.fiber),
+        sugar: get(USDA_NUTRIENTS.sugar),
+        serving_amount: Number(servingInput) || null,
+        serving_unit: selectedUsdaFood.servingSize ? unit : "×",
+      };
+      const { data } = await supabase.from("nutrition_logs").insert(entry).select().single();
+      if (data) setEntries((prev) => [...prev, data]);
+      setSelectedUsdaFood(null);
+      setServingInput("");
+    });
   }
 
   function handleAdd(e) {
@@ -665,261 +694,162 @@ export default function Nutrition() {
         style={{
           background: "#fff",
           borderRadius: 10,
-          padding: "20px 24px",
+          padding: "16px 20px",
           boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
           marginBottom: 24,
         }}
       >
-        <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 16 }}>
-          Add Food
-        </h3>
-        <form onSubmit={handleAdd}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 12,
-            }}
-          >
-            <div
-              ref={usdaRef}
-              style={{ position: "relative", flex: "2 1 180px" }}
-            >
-              <input
-                name="name"
-                placeholder="Food name (search USDA…)"
-                value={form.name}
-                onChange={handleChange}
-                style={inputStyle({ width: "100%", boxSizing: "border-box" })}
-                autoComplete="off"
-              />
-              {usdaLoading && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    right: 0,
-                    zIndex: 200,
-                    marginTop: 4,
-                    background: "#fff",
-                    borderRadius: 8,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
-                    padding: "10px 14px",
-                    fontSize: 13,
-                    color: "#aaa",
-                  }}
-                >
-                  Searching USDA…
-                </div>
-              )}
-              {usdaOpen && usdaResults.length > 0 && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    right: 0,
-                    zIndex: 200,
-                    marginTop: 4,
-                    background: "#fff",
-                    borderRadius: 8,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                    maxHeight: 280,
-                    overflowY: "auto",
-                  }}
-                >
-                  {usdaResults.map((food) => {
-                    const kcal = food.foodNutrients?.find(
-                      (n) => n.nutrientNumber === "208",
-                    )?.value;
-                    return (
-                      <button
-                        key={food.fdcId}
-                        type="button"
-                        onMouseDown={() => applyUSDAFood(food)}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "9px 14px",
-                          background: "none",
-                          border: "none",
-                          borderBottom: "1px solid #f0f0f0",
-                          cursor: "pointer",
-                          fontSize: 13,
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background = "#f7f7fb")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "none")
-                        }
-                      >
-                        <span style={{ fontWeight: 600 }}>
-                          {food.description}
-                        </span>
-                        {food.brandOwner && (
-                          <span
-                            style={{
-                              color: "#aaa",
-                              marginLeft: 8,
-                              fontSize: 12,
-                            }}
-                          >
-                            {food.brandOwner}
-                          </span>
-                        )}
-                        {kcal != null && (
-                          <span
-                            style={{
-                              color: "#ff8c42",
-                              marginLeft: 8,
-                              fontSize: 12,
-                            }}
-                          >
-                            {Math.round(kcal)} kcal
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                border: "1px solid #e0e0e0",
-                borderRadius: 8,
-                background: "#fafafa",
-                padding: "9px 12px",
-              }}
-            >
-              <input
-                name="calories"
-                type="number"
-                value={form.calories}
-                onChange={handleChange}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  outline: "none",
-                  fontSize: 14,
-                  minWidth: 0,
-                  flex: 1,
-                }}
-              />
-              <span
-                style={{
-                  color: "#aaa",
-                  fontSize: 13,
-                  marginLeft: 8,
-                  flexShrink: 0,
-                }}
-              >
-                kcal
-              </span>
-            </div>
-            {[
-              { name: "protein", label: "Protein", flex: "1 1 50px" },
-              { name: "carbs", label: "Carbs", flex: "1 1 50px" },
-              { name: "fat", label: "Fat", flex: "1 1 50px" },
-              { name: "fiber", label: "Fiber", flex: "1 1 50px" },
-              { name: "sugar", label: "Sugar", flex: "1 1 50px" },
-            ].map(({ name, label, flex }) => (
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div ref={usdaRef} style={{ position: "relative", flex: 1 }}>
+            <input
+              name="name"
+              placeholder="Search USDA food database…"
+              value={form.name}
+              onChange={handleChange}
+              style={inputStyle({ width: "100%", boxSizing: "border-box" })}
+              autoComplete="off"
+            />
+            {usdaLoading && (
               <div
-                key={name}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  border: "1px solid #e0e0e0",
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 200,
+                  marginTop: 4,
+                  background: "#fff",
                   borderRadius: 8,
-                  background: "#fafafa",
-                  padding: "9px 12px",
-                  flex,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
+                  padding: "10px 14px",
+                  fontSize: 13,
+                  color: "#aaa",
                 }}
               >
-                <input
-                  name={name}
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder={label}
-                  value={form[name]}
-                  onChange={handleChange}
-                  style={{
-                    border: "none",
-                    background: "transparent",
-                    outline: "none",
-                    fontSize: 14,
-                    minWidth: 0,
-                    flex: 1,
-                  }}
-                />
-                <span
-                  style={{
-                    color: "#aaa",
-                    fontSize: 13,
-                    marginLeft: 8,
-                    flexShrink: 0,
-                  }}
-                >
-                  g {form[name] && label}
-                </span>
+                Searching USDA…
               </div>
-            ))}
-            <div style={{ display: "flex", flex: "1 1 50px", gap: 0 }}>
-              <input
-                name="serving_amount"
-                type="number"
-                min="0"
-                placeholder="Serving size"
-                value={form.serving_amount}
-                onChange={handleChange}
-                style={inputStyle({
-                  flex: 1,
-                  borderRadius: "8px 0 0 8px",
-                  borderRight: "none",
-                })}
-              />
-              <select
-                name="serving_unit"
-                value={form.serving_unit}
-                onChange={handleChange}
+            )}
+            {usdaOpen && usdaResults.length > 0 && (
+              <div
                 style={{
-                  ...inputStyle(),
-                  borderRadius: "0 8px 8px 0",
-                  padding: "9px 8px",
-                  cursor: "pointer",
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  zIndex: 200,
+                  marginTop: 4,
+                  background: "#fff",
+                  borderRadius: 8,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                  maxHeight: 280,
+                  overflowY: "auto",
                 }}
               >
-                {SERVING_UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {usdaResults.map((food) => {
+                  const kcal = food.foodNutrients?.find(
+                    (n) => n.nutrientNumber === "208",
+                  )?.value;
+                  return (
+                    <button
+                      key={food.fdcId}
+                      type="button"
+                      onMouseDown={() => applyUSDAFood(food)}
+                      onMouseEnter={() => setHoveredFood(food)}
+                      onMouseLeave={() => setHoveredFood(null)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "9px 14px",
+                        background: "none",
+                        border: "none",
+                        borderBottom: "1px solid #f0f0f0",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{food.description}</span>
+                      {food.brandOwner && (
+                        <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
+                          {food.brandOwner}
+                        </span>
+                      )}
+                      {kcal != null && (
+                        <span style={{ color: "#ff8c42", marginLeft: 8, fontSize: 12 }}>
+                          {Math.round(kcal)} kcal
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {hoveredFood && <UsdaNutrientCard food={hoveredFood} />}
           </div>
-          {error && (
-            <p style={{ color: "#e05c5c", margin: "0 0 10px", fontSize: 13 }}>
-              {error}
-            </p>
-          )}
-          <div
+          <button
+            type="button"
+            onClick={() => setFormOpen((o) => !o)}
             style={{
+              background: "#ff8c42",
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              width: 38,
+              height: 38,
+              fontSize: 22,
+              lineHeight: 1,
+              cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 16,
-              flexWrap: "wrap",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
+            title={formOpen ? "Close form" : "Add food manually"}
           >
+            {formOpen ? "−" : "+"}
+          </button>
+        </div>
+
+        {selectedUsdaFood && (
+          <div style={{ marginTop: 14, background: "#f7f7fb", borderRadius: 10, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "#333" }}>{selectedUsdaFood.description}</p>
+                {selectedUsdaFood.brandOwner && (
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "#aaa" }}>{selectedUsdaFood.brandOwner}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSelectedUsdaFood(null); setServingInput(""); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}
+              >✕</button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 13, color: "#555", flexShrink: 0 }}>Serving size</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={servingInput}
+                onChange={(e) => setServingInput(e.target.value)}
+                style={{ width: 80, padding: "6px 10px", border: "1px solid #e0e0e0", borderRadius: 7, fontSize: 14, outline: "none", background: "#fff" }}
+              />
+              <span style={{ fontSize: 13, color: "#888" }}>
+                {selectedUsdaFood.servingSize
+                  ? (selectedUsdaFood.servingSizeUnit || "g").toLowerCase()
+                  : "× (multiplier)"}
+              </span>
+            </div>
+
+            <UsdaNutrientCard food={selectedUsdaFood} scale={usdaScale} inline />
+
             <button
-              type="submit"
+              type="button"
+              onClick={handleAddFromUsda}
               style={{
+                marginTop: 12,
                 background: "#ff8c42",
                 color: "#fff",
                 border: "none",
@@ -930,50 +860,141 @@ export default function Nutrition() {
                 fontSize: 14,
               }}
             >
-              + Add Entry
+              + Add to Log
             </button>
-            {(() => {
-              const alreadySaved = savedFoods.some(
-                (f) => f.name.toLowerCase() === form.name.trim().toLowerCase(),
-              );
-              return (
-                <button
-                  type="button"
-                  onClick={alreadySaved ? undefined : handleSaveToMyFoods}
-                  disabled={alreadySaved}
+          </div>
+        )}
+
+        {formOpen && (
+          <form onSubmit={handleAdd} style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 8,
+                  background: "#fafafa",
+                  padding: "9px 12px",
+                  flex: "2 1 120px",
+                }}
+              >
+                <input
+                  name="calories"
+                  type="number"
+                  placeholder="Calories"
+                  value={form.calories}
+                  onChange={handleChange}
+                  style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, minWidth: 0, flex: 1 }}
+                />
+                <span style={{ color: "#aaa", fontSize: 13, marginLeft: 8, flexShrink: 0 }}>kcal</span>
+              </div>
+              {[
+                { name: "protein", label: "Protein" },
+                { name: "carbs", label: "Carbs" },
+                { name: "fat", label: "Fat" },
+                { name: "fiber", label: "Fiber" },
+                { name: "sugar", label: "Sugar" },
+              ].map(({ name, label }) => (
+                <div
+                  key={name}
                   style={{
-                    background: savedFeedback ? "#5cb85c" : "none",
-                    color: savedFeedback
-                      ? "#fff"
-                      : alreadySaved
-                        ? "#aaa"
-                        : "#888",
-                    border: "1px solid",
-                    borderColor: alreadySaved
-                      ? "#e0e0e0"
-                      : savedFeedback
-                        ? "#5cb85c"
-                        : "#e0e0e0",
+                    display: "flex",
+                    alignItems: "center",
+                    border: "1px solid #e0e0e0",
                     borderRadius: 8,
-                    padding: "8px 16px",
-                    cursor: alreadySaved ? "default" : "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
+                    background: "#fafafa",
+                    padding: "9px 12px",
+                    flex: "1 1 70px",
                   }}
                 >
-                  {alreadySaved
-                    ? "★ Already Saved"
-                    : savedFeedback
-                      ? "★ Saved!"
-                      : "☆ Save to My Food Library"}
-                </button>
-              );
-            })()}
-          </div>
-        </form>
+                  <input
+                    name={name}
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder={label}
+                    value={form[name]}
+                    onChange={handleChange}
+                    style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, minWidth: 0, flex: 1 }}
+                  />
+                  <span style={{ color: "#aaa", fontSize: 13, marginLeft: 8, flexShrink: 0 }}>
+                    g{form[name] ? ` ${label}` : ""}
+                  </span>
+                </div>
+              ))}
+              <div style={{ display: "flex", flex: "1 1 50px", gap: 0 }}>
+                <input
+                  name="serving_amount"
+                  type="number"
+                  min="0"
+                  placeholder="Serving size"
+                  value={form.serving_amount}
+                  onChange={handleChange}
+                  style={inputStyle({ flex: 1, borderRadius: "8px 0 0 8px", borderRight: "none" })}
+                />
+                <select
+                  name="serving_unit"
+                  value={form.serving_unit}
+                  onChange={handleChange}
+                  style={{ ...inputStyle(), borderRadius: "0 8px 8px 0", padding: "9px 8px", cursor: "pointer" }}
+                >
+                  {SERVING_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {error && (
+              <p style={{ color: "#e05c5c", margin: "0 0 10px", fontSize: 13 }}>{error}</p>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <button
+                type="submit"
+                style={{
+                  background: "#ff8c42",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "9px 22px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                + Add Entry
+              </button>
+              {(() => {
+                const alreadySaved = savedFoods.some(
+                  (f) => f.name.toLowerCase() === form.name.trim().toLowerCase(),
+                );
+                return (
+                  <button
+                    type="button"
+                    onClick={alreadySaved ? undefined : handleSaveToMyFoods}
+                    disabled={alreadySaved}
+                    style={{
+                      background: savedFeedback ? "#5cb85c" : "none",
+                      color: savedFeedback ? "#fff" : alreadySaved ? "#aaa" : "#888",
+                      border: "1px solid",
+                      borderColor: alreadySaved ? "#e0e0e0" : savedFeedback ? "#5cb85c" : "#e0e0e0",
+                      borderRadius: 8,
+                      padding: "8px 16px",
+                      cursor: alreadySaved ? "default" : "pointer",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {alreadySaved ? "★ Already Saved" : savedFeedback ? "★ Saved!" : "☆ Save to My Food Library"}
+                  </button>
+                );
+              })()}
+            </div>
+          </form>
+        )}
       </div>
 
-      {/* My Food Library Library */}
+      {/* My Food Library */}
       <div
         style={{
           background: "#fff",
@@ -1031,7 +1052,7 @@ export default function Nutrition() {
               entry.
             </p>
           ) : (
-            <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ padding: "0 16px 16px", flex: 1, overflowY: "auto" }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <input
                   type="text"
