@@ -1,6 +1,23 @@
 -- Existing tables (created previously, shown for reference)
 -- nutrition_logs, custom_foods, exercise_routines, workout_sessions
 
+-- Daily nutrition goals (one row per user, upserted on save)
+CREATE TABLE IF NOT EXISTS public.nutrition_goals (
+  user_id    uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  calories   numeric DEFAULT 2000,
+  protein    numeric DEFAULT 150,
+  fat        numeric DEFAULT 65,
+  carbs      numeric DEFAULT 250,
+  fiber      numeric DEFAULT 25,
+  sugar      numeric DEFAULT 50,
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.nutrition_goals ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "own nutrition_goals" ON public.nutrition_goals
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 -- Run these ALTER statements to add columns the app needs:
 
 ALTER TABLE public.nutrition_logs
