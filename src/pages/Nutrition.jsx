@@ -98,6 +98,7 @@ export default function Nutrition() {
   const menuRef = useRef(null);
   const usdaRef = useRef(null);
   const usdaDebounce = useRef(null);
+  const containerRef = useRef(null);
 
   const visibleMacroList = MACROS.filter((m) => visibleMacros.has(m.key));
 
@@ -691,7 +692,9 @@ export default function Nutrition() {
 
       {/* Entry Form */}
       <div
+        ref={containerRef}
         style={{
+          position: "relative",
           background: "#fff",
           borderRadius: 10,
           padding: "16px 20px",
@@ -754,7 +757,9 @@ export default function Nutrition() {
                       key={food.fdcId}
                       type="button"
                       onMouseDown={() => applyUSDAFood(food)}
-                      onMouseEnter={() => setHoveredFood(food)}
+                      onMouseEnter={(e) => {
+                        setHoveredFood(food);
+                      }}
                       onMouseLeave={() => setHoveredFood(null)}
                       style={{
                         display: "block",
@@ -784,7 +789,6 @@ export default function Nutrition() {
                 })}
               </div>
             )}
-            {hoveredFood && <UsdaNutrientCard food={hoveredFood} />}
           </div>
           <button
             type="button"
@@ -807,6 +811,27 @@ export default function Nutrition() {
             title={formOpen ? "Close form" : "Add food manually"}
           >
             {formOpen ? "−" : "+"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMyFoodsOpen((o) => !o)}
+            style={{
+              background: myFoodsOpen ? "#f7f7fb" : "none",
+              border: "1px solid #e0e0e0",
+              borderRadius: 8,
+              width: 38,
+              height: 38,
+              fontSize: 17,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              color: myFoodsOpen ? "#ff8c42" : "#888",
+            }}
+            title="My Food Library"
+          >
+            ☰
           </button>
         </div>
 
@@ -992,53 +1017,18 @@ export default function Nutrition() {
             </div>
           </form>
         )}
-      </div>
 
-      {/* My Food Library */}
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 10,
-          boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
-          marginBottom: 24,
-          overflow: "hidden",
-        }}
-      >
-        <button
-          onClick={() => setMyFoodsOpen((o) => !o)}
-          style={{
-            width: "100%",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "14px 20px",
-            fontSize: 15,
-            fontWeight: 600,
-            color: "#333",
-          }}
-        >
-          <span>
-            My Food Library{" "}
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 400,
-                color: "#aaa",
-                marginLeft: 6,
-              }}
-            >
-              {savedFoods.length} saved
-            </span>
-          </span>
-          <span style={{ fontSize: 12, color: "#aaa" }}>
-            {myFoodsOpen ? "▲" : "▼"}
-          </span>
-        </button>
-        {myFoodsOpen &&
-          (savedFoods.length === 0 ? (
+        {myFoodsOpen && (
+          <div style={{ borderTop: "1px solid #f0f0f0", marginTop: 14, paddingTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
+                My Food Library
+                <span style={{ fontSize: 12, fontWeight: 400, color: "#aaa", marginLeft: 6 }}>
+                  {savedFoods.length} saved
+                </span>
+              </span>
+            </div>
+            {savedFoods.length === 0 ? (
             <p
               style={{
                 textAlign: "center",
@@ -1082,10 +1072,29 @@ export default function Nutrition() {
                   No foods match your search.
                 </p>
               )}
-              {filteredSortedFoods.map((food) => (
+              {filteredSortedFoods.map((food) => {
+                const normalizedFood = {
+                  description: food.name,
+                  servingSize: food.serving_amount,
+                  servingSizeUnit: food.serving_unit,
+                  foodNutrients: [
+                    { nutrientNumber: "208", value: food.calories },
+                    { nutrientNumber: "203", value: food.protein },
+                    { nutrientNumber: "205", value: food.carbs },
+                    { nutrientNumber: "204", value: food.fat },
+                    { nutrientNumber: "291", value: food.fiber },
+                    { nutrientNumber: "269", value: food.sugar },
+                  ],
+                };
+                return (
                 <div
                   key={food.id}
+                  onMouseEnter={(e) => {
+                    setHoveredFood(normalizedFood);
+                  }}
+                  onMouseLeave={() => setHoveredFood(null)}
                   style={{
+                    position: "relative",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -1192,9 +1201,15 @@ export default function Nutrition() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
-          ))}
+          )}
+        </div>
+        )}
+        {hoveredFood && (
+          <UsdaNutrientCard food={hoveredFood} />
+        )}
       </div>
 
       {/* Log Table */}

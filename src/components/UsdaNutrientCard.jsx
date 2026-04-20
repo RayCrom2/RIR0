@@ -8,7 +8,7 @@ const NUTRIENTS = [
   { num: "307", label: "Sodium", unit: "mg", color: "#888" },
 ];
 
-export default function UsdaNutrientCard({ food, scale = 1, inline = false }) {
+export default function UsdaNutrientCard({ food, scale = 1, inline = false, style: styleProp = {} }) {
   const get = (num) => {
     const n = food.foodNutrients?.find((n) => n.nutrientNumber === num);
     return n != null ? Math.round(n.value * scale * 10) / 10 : null;
@@ -27,6 +27,7 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false }) {
         padding: "14px 18px",
         minWidth: 210,
         pointerEvents: "none",
+        ...styleProp,
       };
 
   return (
