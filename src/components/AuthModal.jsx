@@ -33,8 +33,13 @@ export default function AuthModal() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) { setError(error.message); setLoading(false); return; }
     } else {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) { setError(error.message); setLoading(false); return; }
+      if (!data.session) {
+        setError("Check your email to confirm your account, then log in.");
+        setLoading(false);
+        return;
+      }
     }
 
     reset();

@@ -8,7 +8,7 @@ const NUTRIENTS = [
   { num: "307", label: "Sodium", unit: "mg", color: "#888" },
 ];
 
-export default function UsdaNutrientCard({ food, scale = 1, inline = false, style: styleProp = {} }) {
+export default function UsdaNutrientCard({ food, scale = 1, inline = false, style: styleProp = {}, onCompare }) {
   const get = (num) => {
     const n = food.foodNutrients?.find((n) => n.nutrientNumber === num);
     return n != null ? Math.round(n.value * scale * 10) / 10 : null;
@@ -67,6 +67,26 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false, styl
           </div>
         );
       })}
+      {onCompare && !inline && (
+        <button
+          onClick={onCompare}
+          style={{
+            marginTop: 10,
+            width: "100%",
+            padding: "6px 0",
+            background: "#ff8c42",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            pointerEvents: "auto",
+          }}
+        >
+          Compare
+        </button>
+      )}
     </div>
   );
 }

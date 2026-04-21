@@ -10,7 +10,9 @@ export function AuthProvider({ children }) {
   const [pendingAction, setPendingAction] = useState(null);
 
   useEffect(() => {
+    console.log("[auth] url on load:", window.location.href);
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("[auth] getSession:", session?.user?.email ?? null);
       setUser(session?.user ?? null);
       setLoading(false);
     });

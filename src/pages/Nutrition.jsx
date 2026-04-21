@@ -3,6 +3,7 @@ import { LuCalendar } from "react-icons/lu";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import UsdaNutrientCard from "../components/UsdaNutrientCard";
+import NutrientCompare from "../components/NutrientCompare";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -93,6 +94,7 @@ export default function Nutrition() {
   const [usdaLoading, setUsdaLoading] = useState(false);
   const [usdaOpen, setUsdaOpen] = useState(false);
   const [hoveredFood, setHoveredFood] = useState(null);
+  const [compareFood, setCompareFood] = useState(null);
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
   const menuRef = useRef(null);
@@ -507,6 +509,7 @@ export default function Nutrition() {
 
       {/* Daily Progress Bars */}
       <div
+        id="nutrientBars"
         style={{
           background: "#fff",
           borderRadius: 10,
@@ -760,7 +763,7 @@ export default function Nutrition() {
                       onMouseEnter={(e) => {
                         setHoveredFood(food);
                       }}
-                      onMouseLeave={() => setHoveredFood(null)}
+                      onMouseLeave={(e) => (e.target.id === "nutrientBars" || e.target.id === "logTable") ? setHoveredFood(null) : null}
                       style={{
                         display: "block",
                         width: "100%",
@@ -1092,7 +1095,7 @@ export default function Nutrition() {
                   onMouseEnter={(e) => {
                     setHoveredFood(normalizedFood);
                   }}
-                  onMouseLeave={() => setHoveredFood(null)}
+                  onMouseLeave={(e) => (e.target.id === "nutrientBars" || e.target.id === "logTable") ? setHoveredFood(null) : null}
                   style={{
                     position: "relative",
                     display: "flex",
@@ -1207,13 +1210,22 @@ export default function Nutrition() {
           )}
         </div>
         )}
-        {hoveredFood && (
-          <UsdaNutrientCard food={hoveredFood} />
-        )}
+        {compareFood ? (
+          <NutrientCompare
+            foodA={compareFood}
+            onClose={() => setCompareFood(null)}
+          />
+        ) : hoveredFood ? (
+          <UsdaNutrientCard
+            food={hoveredFood}
+            onCompare={() => { setCompareFood(hoveredFood); setHoveredFood(null); }}
+          />
+        ) : null}
       </div>
 
       {/* Log Table */}
       <div
+      id="logTable"
         style={{
           background: "#fff",
           borderRadius: 10,
