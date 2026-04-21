@@ -1,4 +1,4 @@
-# AIOFitness
+# RIR0
 An All-In-One Fitness application that is going to prioritize a feature that provides muscle specific stretching, exercises, information, and injury self-assessment.
 
 
@@ -23,6 +23,3 @@ npm run dev
 
 Open the URL printed by Vite (usually http://localhost:5173/) to see the diagram. Click or tab+Enter on muscle regions to select them. The legend on the right also toggles selection.
 
-Next steps:
-- Replace the simple SVG with a more detailed diagram (or import an SVG file) and map accurate regions.
-- Add per-muscle-group info pages and exercises.
