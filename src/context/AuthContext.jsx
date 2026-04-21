@@ -10,15 +10,12 @@ export function AuthProvider({ children }) {
   const [pendingAction, setPendingAction] = useState(null);
 
   useEffect(() => {
-    console.log("[auth] url on load:", window.location.href);
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("[auth] getSession:", session?.user?.email ?? null);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("[auth]", event, session?.user?.email ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
