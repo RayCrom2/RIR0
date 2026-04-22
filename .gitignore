@@ -3,3 +3,5 @@ node_modules/
 .env
 dist/
 .claude/
+supabase/
+vite.config.js.timestamp-*.mjs
