@@ -405,11 +405,12 @@ export default function Nutrition() {
         data: { user: u },
       } = await supabase.auth.getUser();
       const customAmount = Number(
-        libraryAmounts[food.name] ?? food.serving_amount,
+        libraryAmounts[food.name] ?? food.serving_amount ?? 1,
       );
       const baseAmount = Number(food.serving_amount);
-      const scale =
-        baseAmount > 0 && customAmount > 0 ? customAmount / baseAmount : 1;
+      const scale = baseAmount > 0
+        ? (customAmount > 0 ? customAmount / baseAmount : 1)
+        : customAmount;
       const now = new Date();
       const entry = {
         user_id: u.id,
@@ -427,7 +428,7 @@ export default function Nutrition() {
         fiber: Math.round(food.fiber * scale * 10) / 10,
         sugar: Math.round(food.sugar * scale * 10) / 10,
         serving_amount: customAmount || food.serving_amount,
-        serving_unit: food.serving_unit,
+        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : food.serving_unit,
       };
       const { data } = await supabase
         .from("nutrition_logs")
@@ -856,19 +857,35 @@ export default function Nutrition() {
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 13, color: "#555", flexShrink: 0 }}>Serving size</span>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={servingInput}
-                onChange={(e) => setServingInput(e.target.value)}
-                style={{ width: 80, padding: "6px 10px", border: "1px solid #e0e0e0", borderRadius: 7, fontSize: 14, outline: "none", background: "#fff" }}
-              />
-              <span style={{ fontSize: 13, color: "#888" }}>
-                {selectedUsdaFood.servingSize
-                  ? (selectedUsdaFood.servingSizeUnit || "g").toLowerCase()
-                  : "× (multiplier)"}
-              </span>
+              {selectedUsdaFood.servingSize ? (
+                <div style={{ display: "flex" }}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={servingInput}
+                    onChange={(e) => setServingInput(e.target.value)}
+                    style={{ width: 70, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", borderRight: "none", fontSize: 13, outline: "none", background: "#fff" }}
+                  />
+                  <span style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
+                    {(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: "flex" }}>
+                  <span style={{ border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
+                    ×
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={servingInput}
+                    onChange={(e) => setServingInput(e.target.value)}
+                    style={{ width: 60, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "0 6px 6px 0", borderLeft: "none", fontSize: 13, outline: "none", background: "#fff" }}
+                  />
+                </div>
+              )}
             </div>
 
             <UsdaNutrientCard food={selectedUsdaFood} scale={usdaScale} inline />
@@ -1129,14 +1146,13 @@ export default function Nutrition() {
                       alignItems: "center",
                     }}
                   >
-                    {food.serving_amount && (
+                    {food.serving_amount && food.serving_unit !== "×" ? (
                       <div style={{ display: "flex" }}>
                         <input
                           type="number"
                           min="0"
-                          value={
-                            libraryAmounts[food.name] ?? food.serving_amount
-                          }
+                          value={libraryAmounts[food.name] ?? food.serving_amount}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) =>
                             setLibraryAmounts((prev) => ({
                               ...prev,
@@ -1167,6 +1183,44 @@ export default function Nutrition() {
                         >
                           {food.serving_unit || "g"}
                         </span>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex" }}>
+                        <span
+                          style={{
+                            border: "1px solid #e0e0e0",
+                            borderRadius: "6px 0 0 6px",
+                            padding: "4px 7px",
+                            fontSize: 12,
+                            color: "#888",
+                            background: "#fafafa",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          ×
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          value={libraryAmounts[food.name] ?? 1}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) =>
+                            setLibraryAmounts((prev) => ({
+                              ...prev,
+                              [food.name]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            ...inputStyle(),
+                            width: 52,
+                            borderRadius: "0 6px 6px 0",
+                            borderLeft: "none",
+                            padding: "4px 6px",
+                            fontSize: 12,
+                          }}
+                        />
                       </div>
                     )}
                     <button
