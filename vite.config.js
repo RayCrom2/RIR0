@@ -19,7 +19,7 @@ export default defineConfig({
       manifest: {
         name: 'RIR0',
         short_name: 'RIR0',
-        description: 'Your AI-powered fitness companion',
+        description: 'Your comprehensive fitness tool',
         theme_color: '#000000',
         background_color: '#ffffff',
         display: 'standalone',
