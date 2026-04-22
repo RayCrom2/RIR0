@@ -1,26 +1,50 @@
 import React from 'react'
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import DiagramPage from './pages/DiagramPage'
 import Videos from './pages/Videos'
 import Nutrition from './pages/Nutrition'
 import ExerciseLogger from './pages/ExerciseLogger'
+import Profile from './pages/Profile'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AuthModal from './components/AuthModal'
+import OnboardingModal from './components/OnboardingModal'
 import { supabase } from './lib/supabase'
 
 function NavAuth() {
   const { user, setModalOpen } = useAuth();
-  return user ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-      <span style={{ fontSize: 13, color: '#888' }}>{user.email}</span>
-      <button
-        onClick={() => supabase.auth.signOut()}
-        style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#555' }}
-      >
-        Sign Out
-      </button>
-    </div>
-  ) : (
+  const navigate = useNavigate();
+  if (user) {
+    const avatarUrl = user.user_metadata?.avatar_url;
+    const initial = (user.user_metadata?.full_name || user.email || '?')[0].toUpperCase();
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt="avatar"
+            title="Profile & Goals"
+            onClick={() => navigate('/profile')}
+            style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+          />
+        ) : (
+          <div
+            title="Profile & Goals"
+            onClick={() => navigate('/profile')}
+            style={{ width: 30, height: 30, borderRadius: '50%', background: '#ff8c42', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0, cursor: 'pointer' }}
+          >
+            {initial}
+          </div>
+        )}
+        <button
+          onClick={() => supabase.auth.signOut()}
+          style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontSize: 13, color: '#555' }}
+        >
+          Sign Out
+        </button>
+      </div>
+    );
+  }
+  return (
     <button
       onClick={() => setModalOpen(true)}
       style={{ marginLeft: 'auto', background: '#ff8c42', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
@@ -51,10 +75,12 @@ export default function App() {
           <Route path="/nutrition" element={<Nutrition />} />
           <Route path="/exerciselogger" element={<ExerciseLogger />} />
           <Route path="/diagram" element={<DiagramPage />} />
+          <Route path="/profile" element={<Profile />} />
           {/* <Route path="/videos" element={<Videos />} /> */}
         </Routes>
 
         <AuthModal />
+        <OnboardingModal />
       </div>
     </AuthProvider>
   )

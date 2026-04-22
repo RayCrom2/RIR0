@@ -17,8 +17,8 @@ export default defineConfig({
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'AIOFitness',
-        short_name: 'AIOFitness',
+        name: 'RIR0',
+        short_name: 'RIR0',
         description: 'Your AI-powered fitness companion',
         theme_color: '#000000',
         background_color: '#ffffff',

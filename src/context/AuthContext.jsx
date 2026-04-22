@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,6 +22,16 @@ export function AuthProvider({ children }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) { setNeedsOnboarding(false); return; }
+    supabase
+      .from("nutrition_goals")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (!data) setNeedsOnboarding(true); });
+  }, [user]);
 
   // Call this instead of saving directly. If not logged in, opens the modal
   // and re-runs the action after login.
@@ -42,7 +53,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, modalOpen, setModalOpen, requireAuth, onAuthSuccess }}>
+    <AuthContext.Provider value={{ user, loading, modalOpen, setModalOpen, requireAuth, onAuthSuccess, needsOnboarding, setNeedsOnboarding }}>
       {children}
     </AuthContext.Provider>
   );
