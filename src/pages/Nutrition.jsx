@@ -97,6 +97,7 @@ export default function Nutrition() {
   const [hoveredLibraryId, setHoveredLibraryId] = useState(null);
   const [pinnedFood, setPinnedFood] = useState(null);
   const [compareFood, setCompareFood] = useState(null);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 767px)").matches);
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
   const menuRef = useRef(null);
@@ -138,6 +139,13 @@ export default function Nutrition() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
   }, []);
 
   function toggleMacro(key) {
@@ -224,7 +232,7 @@ export default function Nutrition() {
   function handleChange(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setError("");
-    if (e.target.name === "name") {
+    if (e.target.name === "name" && !formOpen) {
       const q = e.target.value.trim();
       clearTimeout(usdaDebounce.current);
       if (q.length >= 2) {
@@ -714,7 +722,7 @@ export default function Nutrition() {
           <div ref={usdaRef} style={{ position: "relative", flex: 1 }}>
             <input
               name="name"
-              placeholder="Search USDA food database…"
+              placeholder={formOpen ? "Food name…" : "Search USDA food database…"}
               value={form.name}
               onChange={handleChange}
               style={inputStyle({ width: "100%", boxSizing: "border-box" })}
@@ -1279,21 +1287,114 @@ export default function Nutrition() {
           )}
         </div>
         )}
-        {compareFood ? (
+        {!isMobile && compareFood ? (
           <NutrientCompare
             foodA={compareFood}
             onClose={() => setCompareFood(null)}
+            libraryFoods={savedFoods.map((f) => ({
+              id: f.id,
+              description: f.name,
+              servingSize: f.serving_amount,
+              servingSizeUnit: f.serving_unit,
+              foodNutrients: [
+                { nutrientNumber: "208", value: f.calories },
+                { nutrientNumber: "203", value: f.protein },
+                { nutrientNumber: "205", value: f.carbs },
+                { nutrientNumber: "204", value: f.fat },
+                { nutrientNumber: "291", value: f.fiber },
+                { nutrientNumber: "269", value: f.sugar },
+              ],
+            }))}
           />
-        ) : pinnedFood ? (
+        ) : !isMobile && pinnedFood ? (
           <UsdaNutrientCard
             food={pinnedFood}
             onClose={() => setPinnedFood(null)}
             onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
           />
-        ) : hoveredFood ? (
+        ) : !isMobile && hoveredFood ? (
           <UsdaNutrientCard food={hoveredFood} />
         ) : null}
       </div>
+
+      {/* Mobile bottom sheet for pinned food */}
+      {isMobile && pinnedFood && (
+        <div
+          onMouseDown={() => { setPinnedFood(null); setHoveredFood(null); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 400,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "flex-end",
+          }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              background: "#fff",
+              borderRadius: "18px 18px 0 0",
+              padding: "20px 20px 32px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+            }}
+          >
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
+            <UsdaNutrientCard
+              food={pinnedFood}
+              onClose={() => { setPinnedFood(null); setHoveredFood(null); }}
+              onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
+              style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile bottom sheet for compare */}
+      {isMobile && compareFood && (
+        <div
+          onMouseDown={() => setCompareFood(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 400,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "flex-end",
+          }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              background: "#fff",
+              borderRadius: "18px 18px 0 0",
+              padding: "20px 20px 32px",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+            }}
+          >
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
+            <NutrientCompare
+              foodA={compareFood}
+              onClose={() => setCompareFood(null)}
+              libraryFoods={savedFoods.map((f) => ({
+                id: f.id,
+                description: f.name,
+                servingSize: f.serving_amount,
+                servingSizeUnit: f.serving_unit,
+                foodNutrients: [
+                  { nutrientNumber: "208", value: f.calories },
+                  { nutrientNumber: "203", value: f.protein },
+                  { nutrientNumber: "205", value: f.carbs },
+                  { nutrientNumber: "204", value: f.fat },
+                  { nutrientNumber: "291", value: f.fiber },
+                  { nutrientNumber: "269", value: f.sugar },
+                ],
+              }))}
+              style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Log Table */}
       <div

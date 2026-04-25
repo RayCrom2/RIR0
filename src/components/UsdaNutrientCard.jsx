@@ -16,7 +16,7 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false, styl
   useEffect(() => {
     if (!onClose) return;
     function handleMouseDown(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (containerRef.current && !e.composedPath().includes(containerRef.current)) {
         onClose();
       }
     }

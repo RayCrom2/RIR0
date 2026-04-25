@@ -18,12 +18,16 @@ function getVal(food, num) {
   return n != null ? Math.round(n.value * 10) / 10 : null;
 }
 
-export default function NutrientCompare({ foodA, onClose, style: styleProp = {} }) {
+export default function NutrientCompare({ foodA, onClose, style: styleProp = {}, libraryFoods = [] }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [foodB, setFoodB] = useState(null);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
+
+  const libraryMatches = query.trim().length >= 1
+    ? libraryFoods.filter((f) => f.description.toLowerCase().includes(query.trim().toLowerCase()))
+    : [];
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return; }
@@ -41,7 +45,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {} 
 
   useEffect(() => {
     function handleMouseDown(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
+      if (containerRef.current && !e.composedPath().includes(containerRef.current)) {
         onClose();
       }
     }
@@ -65,23 +69,36 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {} 
   return (
     <div ref={containerRef} style={containerStyle}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "#ff8c42", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {foodA.description}
-          </p>
-          {foodB && (
-            <p style={{ margin: "2px 0 0", fontWeight: 700, fontSize: 13, color: COLOR_B, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              vs {foodB.description}
+      <div style={{ marginBottom: 10 }}>
+        {foodB ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: "#ff8c42", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left" }}>
+              {foodA.description}
             </p>
-          )}
-        </div>
-        <button
-          onClick={onClose}
-          style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#aaa", marginLeft: 8, lineHeight: 1, padding: 0 }}
-        >
-          ✕
-        </button>
+            <span style={{ fontSize: 10, fontWeight: 800, color: "#aaa", flexShrink: 0, letterSpacing: "0.05em" }}>VS</span>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 12, color: COLOR_B, lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right" }}>
+              {foodB.description}
+            </p>
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#aaa", marginLeft: 4, lineHeight: 1, padding: 0, flexShrink: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "#ff8c42", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+              {foodA.description}
+            </p>
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#aaa", marginLeft: 8, lineHeight: 1, padding: 0, flexShrink: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search for food B */}
@@ -101,7 +118,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {} 
             outline: "none",
           }}
         />
-        {results.length > 0 && (
+        {(libraryMatches.length > 0 || results.length > 0) && (
           <div style={{
             position: "absolute",
             top: "100%",
@@ -112,30 +129,45 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {} 
             borderRadius: 6,
             boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
             zIndex: 10,
-            maxHeight: 180,
+            maxHeight: 220,
             overflowY: "auto",
           }}>
-            {results.map((f) => (
-              <button
-                key={f.fdcId}
-                type="button"
-                onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); }}
-                style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "7px 10px",
-                  background: "none",
-                  border: "none",
-                  borderBottom: "1px solid #f0f0f0",
-                  cursor: "pointer",
-                  fontSize: 12,
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>{f.description}</span>
-                {f.brandOwner && <span style={{ color: "#aaa", marginLeft: 6 }}>{f.brandOwner}</span>}
-              </button>
-            ))}
+            {libraryMatches.length > 0 && (
+              <>
+                <p style={{ margin: 0, padding: "5px 10px 3px", fontSize: 10, fontWeight: 700, color: "#ff8c42", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  My Foods
+                </p>
+                {libraryMatches.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", background: "none", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer", fontSize: 12 }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{f.description}</span>
+                    {f.servingSize && <span style={{ color: "#aaa", marginLeft: 6 }}>{f.servingSize}{(f.servingSizeUnit || "g").toLowerCase()}</span>}
+                  </button>
+                ))}
+              </>
+            )}
+            {results.length > 0 && (
+              <>
+                <p style={{ margin: 0, padding: "5px 10px 3px", fontSize: 10, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  USDA Database
+                </p>
+                {results.map((f) => (
+                  <button
+                    key={f.fdcId}
+                    type="button"
+                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", background: "none", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer", fontSize: 12 }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{f.description}</span>
+                    {f.brandOwner && <span style={{ color: "#aaa", marginLeft: 6 }}>{f.brandOwner}</span>}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -146,64 +178,36 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {} 
           const valA = getVal(foodA, num);
           const valB = foodB ? getVal(foodB, num) : null;
           if (valA === null && valB === null) return null;
-          const maxVal = Math.max(valA ?? 0, valB ?? 0) || 1;
-          const pctA = ((valA ?? 0) / maxVal) * 100;
-          const pctB = ((valB ?? 0) / maxVal) * 100;
+          const aVal = valA ?? 0;
+          const bVal = valB ?? 0;
+          const total = aVal + bVal || 1;
+          const pctA = foodB ? (aVal / total) * 100 : 100;
+          const pctB = foodB ? (bVal / total) * 100 : 0;
 
           return (
-            <div key={num} style={{ marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#555", marginBottom: 2 }}>
-                <span>{label}</span>
-                <span style={{ color: "#aaa", fontSize: 10 }}>{unit}</span>
+            <div key={num} style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, marginBottom: 3 }}>
+                <span style={{ color, fontWeight: 700 }}>{aVal} {unit}</span>
+                <span style={{ color: "#888", fontSize: 10 }}>{label}</span>
+                {foodB
+                  ? <span style={{ color: COLOR_B, fontWeight: 700 }}>{bVal} {unit}</span>
+                  : <span style={{ color: "#aaa", fontSize: 10 }}>{unit}</span>
+                }
               </div>
-              {/* Food A bar (left→right) */}
-              <div style={{ position: "relative", height: 10, background: "#f0f0f0", borderRadius: 5, marginBottom: 2, overflow: "hidden" }}>
+              <div style={{ position: "relative", height: 10, background: "#f0f0f0", borderRadius: 5, overflow: "hidden" }}>
                 <div style={{
                   position: "absolute", left: 0, top: 0, bottom: 0,
                   width: `${pctA}%`,
                   background: color,
-                  borderRadius: 5,
-                  transition: "width 0.2s",
+                  transition: "width 0.3s ease",
                 }} />
-                {valA !== null && (
-                  <span style={{
-                    position: "absolute",
-                    right: 4,
-                    top: 0,
-                    bottom: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    color: "#333",
-                  }}>{valA}</span>
-                )}
+                <div style={{
+                  position: "absolute", right: 0, top: 0, bottom: 0,
+                  width: `${pctB}%`,
+                  background: COLOR_B,
+                  transition: "width 0.3s ease",
+                }} />
               </div>
-              {/* Food B bar (right→left) */}
-              {foodB && (
-                <div style={{ position: "relative", height: 10, background: "#f0f0f0", borderRadius: 5, overflow: "hidden" }}>
-                  <div style={{
-                    position: "absolute", right: 0, top: 0, bottom: 0,
-                    width: `${pctB}%`,
-                    background: COLOR_B,
-                    borderRadius: 5,
-                    transition: "width 0.2s",
-                  }} />
-                  {valB !== null && (
-                    <span style={{
-                      position: "absolute",
-                      left: 4,
-                      top: 0,
-                      bottom: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      fontSize: 9,
-                      fontWeight: 700,
-                      color: "#333",
-                    }}>{valB}</span>
-                  )}
-                </div>
-              )}
             </div>
           );
         })}
