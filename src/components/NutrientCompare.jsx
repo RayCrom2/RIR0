@@ -10,6 +10,7 @@ const NUTRIENTS = [
   { num: "307", label: "Sodium", unit: "mg", color: "#888" },
 ];
 
+const COLOR_A = "#ff8c42";
 const COLOR_B = "#667eea";
 const USDA_KEY = import.meta.env.VITE_USDA_API_KEY;
 
@@ -187,7 +188,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
           return (
             <div key={num} style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, marginBottom: 3 }}>
-                <span style={{ color, fontWeight: 700 }}>{aVal} {unit}</span>
+                <span style={{ color: COLOR_A, fontWeight: 700 }}>{aVal} {unit}</span>
                 <span style={{ color: "#888", fontSize: 10 }}>{label}</span>
                 {foodB
                   ? <span style={{ color: COLOR_B, fontWeight: 700 }}>{bVal} {unit}</span>
@@ -198,7 +199,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
                 <div style={{
                   position: "absolute", left: 0, top: 0, bottom: 0,
                   width: `${pctA}%`,
-                  background: color,
+                  background: COLOR_A,
                   transition: "width 0.3s ease",
                 }} />
                 <div style={{
