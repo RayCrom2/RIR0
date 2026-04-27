@@ -22,11 +22,12 @@ function getVal(food, num) {
 export default function NutrientCompare({ foodA, onClose, style: styleProp = {}, libraryFoods = [] }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
   const [foodB, setFoodB] = useState(null);
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
 
-  const libraryMatches = query.trim().length >= 1
+  const libraryMatches = query.trim().length >= 1 && showResults
     ? libraryFoods.filter((f) => f.description.toLowerCase().includes(query.trim().toLowerCase()))
     : [];
 
@@ -107,7 +108,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setShowResults(true); }}
           placeholder="Search food to compare…"
           style={{
             width: "100%",
@@ -119,7 +120,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
             outline: "none",
           }}
         />
-        {(libraryMatches.length > 0 || results.length > 0) && (
+        {showResults && (libraryMatches.length > 0 || results.length > 0) && (
           <div style={{
             position: "absolute",
             top: "100%",
@@ -142,7 +143,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
                   <button
                     key={f.id}
                     type="button"
-                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); }}
+                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); setShowResults(false); }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", background: "none", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer", fontSize: 12 }}
                   >
                     <span style={{ fontWeight: 600 }}>{f.description}</span>
@@ -160,7 +161,7 @@ export default function NutrientCompare({ foodA, onClose, style: styleProp = {},
                   <button
                     key={f.fdcId}
                     type="button"
-                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); }}
+                    onMouseDown={() => { setFoodB(f); setQuery(""); setResults([]); setShowResults(false); }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 10px", background: "none", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer", fontSize: 12 }}
                   >
                     <span style={{ fontWeight: 600 }}>{f.description}</span>
