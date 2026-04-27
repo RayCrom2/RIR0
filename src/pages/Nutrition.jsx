@@ -773,10 +773,8 @@ export default function Nutrition() {
                       key={food.fdcId}
                       type="button"
                       onMouseDown={() => applyUSDAFood(food)}
-                      onMouseEnter={(e) => {
-                        setHoveredFood(food);
-                      }}
-                      onMouseLeave={(e) => (e.target.id === "nutrientBars" || e.target.id === "logTable") ? setHoveredFood(null) : null}
+                      onMouseEnter={() => { if (!isMobile) setHoveredFood(food); }}
+                      onMouseLeave={() => { if (!isMobile) setHoveredFood(null); }}
                       style={{
                         display: "block",
                         width: "100%",
@@ -1132,8 +1130,13 @@ export default function Nutrition() {
                       setPinnedFood(normalizedFood);
                     }
                   }}
-                  onMouseEnter={() => { setHoveredFood(normalizedFood); setHoveredLibraryId(food.id); }}
-                  onMouseLeave={() => { setHoveredFood(null); setHoveredLibraryId(null); }}
+                  onMouseEnter={(e) => {
+                    if (isMobile) return;
+                    if (e.target.closest("input, button")) return;
+                    setHoveredFood(normalizedFood);
+                    setHoveredLibraryId(food.id);
+                  }}
+                  onMouseLeave={() => { if (isMobile) return; setHoveredFood(null); setHoveredLibraryId(null); }}
                   style={{
                     position: "relative",
                     display: "flex",
