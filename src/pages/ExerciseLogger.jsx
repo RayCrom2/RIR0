@@ -34,7 +34,10 @@ async function loadExerciseData() {
         if (seen.has(key)) continue;
         seen.add(key);
         const img = (e.images || []).find((i) => i.is_main) || e.images?.[0];
-        imageMap[key] = img ? img.image : null;
+        const imgUrl = img?.image;
+        imageMap[key] = imgUrl
+          ? imgUrl.startsWith("http") ? imgUrl : `https://wger.de${imgUrl}`
+          : null;
       }
     }
     exerciseDataCache = { names: [...seen].sort(), imageMap };
