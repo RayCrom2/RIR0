@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import UsdaNutrientCard from "../components/UsdaNutrientCard";
 import NutrientCompare from "../components/NutrientCompare";
+import NutritionCalendar from "../components/NutritionCalendar";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -46,15 +47,44 @@ const USDA_UNIT_MAP = {
 };
 
 const MACROS = [
-  { key: "calories", label: "Calories", unit: "kcal", color: "#ff8c42" },
-  { key: "protein", label: "Protein", unit: "g", color: "#4f8ef7" },
-  { key: "carbs", label: "Carbs", unit: "g", color: "#f7c948" },
-  { key: "fat", label: "Fat", unit: "g", color: "#e05c5c" },
-  { key: "fiber", label: "Fiber", unit: "g", color: "#5cb85c" },
-  { key: "sugar", label: "Sugar", unit: "g", color: "#c87dd4" },
+  { key: "calories", minKey: "calories_min", dirKey: "calories_dir", label: "Calories", unit: "kcal", color: "#ff8c42", defaultDir: "below" },
+  { key: "protein",  minKey: "protein_min",  dirKey: "protein_dir",  label: "Protein",  unit: "g",    color: "#4f8ef7", defaultDir: "above" },
+  { key: "carbs",    minKey: "carbs_min",    dirKey: "carbs_dir",    label: "Carbs",    unit: "g",    color: "#f7c948", defaultDir: "below" },
+  { key: "fat",      minKey: "fat_min",      dirKey: "fat_dir",      label: "Fat",      unit: "g",    color: "#e05c5c", defaultDir: "below" },
+  { key: "fiber",    minKey: "fiber_min",    dirKey: "fiber_dir",    label: "Fiber",    unit: "g",    color: "#5cb85c", defaultDir: "above" },
+  { key: "sugar",    minKey: "sugar_min",    dirKey: "sugar_dir",    label: "Sugar",    unit: "g",    color: "#c87dd4", defaultDir: "below" },
 ];
 
-const DEFAULT_GOALS = { calories: 2000, protein: 150, fat: 65, carbs: 250, fiber: 25, sugar: 50 };
+const DEFAULT_GOALS = {
+  calories: 2000, protein: 150, fat: 65, carbs: 250, fiber: 25, sugar: 50,
+  calories_dir: "below", protein_dir: "above", carbs_dir: "below",
+  fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
+};
+
+function checkGoalsMet(totals, goals) {
+  function check(m) {
+    const target = goals[m.key];
+    const min = goals[m.minKey];
+    if (!target && !min) return true; // null or 0 = not tracked
+    const dir = goals[m.dirKey] ?? m.defaultDir;
+    const val = totals[m.key];
+    if (min != null) return val >= min && val <= (target ?? Infinity);
+    return dir === "above" ? val >= target : val <= target;
+  }
+  return MACROS.every(check);
+}
+
+async function upsertDailyStatus(date, dayEntries, currentGoals, userId) {
+  const totals = MACROS.reduce((acc, m) => {
+    acc[m.key] = dayEntries.reduce((s, e) => s + (e[m.key] || 0), 0);
+    return acc;
+  }, {});
+  const met = checkGoalsMet(totals, currentGoals);
+  await supabase.from("daily_goal_status").upsert(
+    { user_id: userId, date, met },
+    { onConflict: "user_id,date" }
+  );
+}
 
 function dateStr(offset = 0) {
   const d = new Date();
@@ -89,6 +119,7 @@ export default function Nutrition() {
     return new Set(MACROS.map((m) => m.key));
   });
   const [goals, setGoals] = useState(DEFAULT_GOALS);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [usdaResults, setUsdaResults] = useState([]);
   const [usdaLoading, setUsdaLoading] = useState(false);
@@ -297,7 +328,11 @@ export default function Nutrition() {
         serving_unit: selectedUsdaFood.servingSize ? unit : "×",
       };
       const { data } = await supabase.from("nutrition_logs").insert(entry).select().single();
-      if (data) setEntries((prev) => [...prev, data]);
+      if (data) {
+        const next = [...entries, data];
+        setEntries(next);
+        upsertDailyStatus(todayStr(), next, goals, u.id);
+      }
       setSelectedUsdaFood(null);
       setServingInput("");
     });
@@ -346,7 +381,11 @@ export default function Nutrition() {
         .insert(entry)
         .select()
         .single();
-      if (data) setEntries((prev) => [...prev, data]);
+      if (data) {
+        const next = [...entries, data];
+        setEntries(next);
+        upsertDailyStatus(todayStr(), next, goals, u.id);
+      }
       setForm(EMPTY_FORM);
     });
   }
@@ -394,7 +433,9 @@ export default function Nutrition() {
 
   async function handleDelete(id) {
     await supabase.from("nutrition_logs").delete().eq("id", id);
-    setEntries((prev) => prev.filter((e) => e.id !== id));
+    const next = entries.filter((e) => e.id !== id);
+    setEntries(next);
+    if (user) upsertDailyStatus(todayStr(), next, goals, user.id);
   }
 
   async function handleClearAll() {
@@ -407,6 +448,7 @@ export default function Nutrition() {
       .gte("logged_at", todayStr())
       .lt("logged_at", tomorrowStr());
     setEntries([]);
+    upsertDailyStatus(todayStr(), [], goals, user.id);
   }
 
   function handleAddFromLibrary(food) {
@@ -445,7 +487,11 @@ export default function Nutrition() {
         .insert(entry)
         .select()
         .single();
-      if (data) setEntries((prev) => [...prev, data]);
+      if (data) {
+        const nextEntries = [...entries, data];
+        setEntries(nextEntries);
+        upsertDailyStatus(todayStr(), nextEntries, goals, u.id);
+      }
       setLibraryAmounts((prev) => {
         const next = { ...prev };
         delete next[food.name];
@@ -509,7 +555,7 @@ export default function Nutrition() {
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 8px" }}>
       <div style={{ display: "flex" }}>
         <p className="font-bold text-[2rem] mb-1">Nutrition Tracker</p>
-        <button className="relative inline-flex items-center justify-center ml-auto cursor-pointer">
+        <button className="relative inline-flex items-center justify-center ml-auto cursor-pointer" onClick={() => setCalendarOpen(true)}>
           <LuCalendar size={45} />
           <span className="absolute bottom-[15px] text-[11px] font-bold leading-none">
             {monthAbbr}
@@ -641,65 +687,47 @@ export default function Nutrition() {
         </div>
         {visibleMacroList.map((m) => {
           const consumed = totals[m.key];
-          const limit = goals[m.key] || 1;
-          const pct = Math.min(100, (consumed / limit) * 100);
-          const over = consumed > limit;
+          const rawMax = goals[m.key];
+          const minVal = goals[m.minKey] ?? null;
+          const isTracked = !!(rawMax || minVal);
+          const maxVal = rawMax || 1;
+          const pct = isTracked ? Math.min(100, (consumed / maxVal) * 100) : 0;
+          const minPct = (isTracked && minVal != null) ? Math.min(100, (minVal / maxVal) * 100) : null;
+          const over = isTracked && consumed > maxVal;
+          const under = isTracked && minVal != null && consumed < minVal;
+
+          const dir = goals[m.dirKey] ?? m.defaultDir;
+          let statusColor;
+          if (!isTracked) {
+            statusColor = "#aaa";
+          } else if (minVal != null) {
+            statusColor = over ? "#e05c5c" : under ? "#f0a500" : "#5cb85c";
+          } else {
+            const met = dir === "above" ? consumed >= maxVal : consumed <= maxVal;
+            statusColor = met ? "#5cb85c" : "#e05c5c";
+          }
+
           return (
             <div key={m.key} style={{ marginBottom: 14 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                  marginBottom: 5,
-                  fontSize: 13,
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color: "#333",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 7,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: m.color,
-                      display: "inline-block",
-                      flexShrink: 0,
-                    }}
-                  />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, fontSize: 13 }}>
+                <span style={{ fontWeight: 600, color: "#333", display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, display: "inline-block", flexShrink: 0 }} />
                   {m.label}
                 </span>
-                <span style={{ color: over ? "#e05c5c" : "#888", fontWeight: over ? 700 : 400 }}>
-                  {m.key === "calories"
-                    ? consumed.toFixed(0)
-                    : consumed.toFixed(1)}{" "}
-                  / {limit} {m.unit}
+                <span style={{ color: statusColor, fontWeight: isTracked ? 600 : 400 }}>
+                  {m.key === "calories" ? consumed.toFixed(0) : consumed.toFixed(1)}{" "}
+                  {isTracked
+                    ? `/ ${minVal != null ? `${minVal}–${maxVal}` : maxVal} ${m.unit}`
+                    : m.unit}
                 </span>
               </div>
-              <div
-                style={{
-                  height: 8,
-                  background: "#f0f0f0",
-                  borderRadius: 99,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${pct}%`,
-                    background: over ? "#e05c5c" : m.color,
-                    borderRadius: 99,
-                    transition: "width 0.3s ease",
-                  }}
-                />
+              <div style={{ height: 8, background: "#f0f0f0", borderRadius: 99, position: "relative" }}>
+                {isTracked && (
+                  <div style={{ height: "100%", width: `${pct}%`, background: m.color, borderRadius: 99, transition: "width 0.3s ease" }} />
+                )}
+                {minPct != null && (
+                  <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.25)", borderRadius: 1 }} />
+                )}
               </div>
             </div>
           );
@@ -1623,6 +1651,13 @@ export default function Nutrition() {
           </div>
         )}
       </div>
+
+      {calendarOpen && (
+        <NutritionCalendar
+          userId={user?.id}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
     </div>
   );
 }
