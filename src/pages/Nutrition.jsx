@@ -1122,7 +1122,8 @@ export default function Nutrition() {
                   key={food.id}
                   title="Click to compare with another item"
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => {
+                  onClick={(e) => {
+                    if (e.target.closest("input, button")) return;
                     if (pinnedFood?.id === food.id) {
                       setPinnedFood(null);
                       setHoveredFood(null);
