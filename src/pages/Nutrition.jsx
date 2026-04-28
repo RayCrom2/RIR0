@@ -797,36 +797,68 @@ export default function Nutrition() {
                     (n) => n.nutrientNumber === "208",
                   )?.value;
                   return (
-                    <button
+                    <div
                       key={food.fdcId}
-                      type="button"
-                      onMouseDown={() => applyUSDAFood(food)}
                       onMouseEnter={() => { if (!isMobile) setHoveredFood(food); }}
                       onMouseLeave={() => { if (!isMobile) setHoveredFood(null); }}
                       style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "9px 14px",
-                        background: "none",
-                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
                         borderBottom: "1px solid #f0f0f0",
-                        cursor: "pointer",
-                        fontSize: 13,
                       }}
                     >
-                      <span style={{ fontWeight: 600 }}>{food.description}</span>
-                      {food.brandOwner && (
-                        <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
-                          {food.brandOwner}
-                        </span>
-                      )}
-                      {kcal != null && (
-                        <span style={{ color: "#ff8c42", marginLeft: 8, fontSize: 12 }}>
-                          {Math.round(kcal)} kcal
-                        </span>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        onMouseDown={() => applyUSDAFood(food)}
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          padding: "9px 14px",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={{ fontWeight: 600 }}>{food.description}</span>
+                        {food.brandOwner && (
+                          <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
+                            {food.brandOwner}
+                          </span>
+                        )}
+                        {kcal != null && (
+                          <span style={{ color: "#ff8c42", marginLeft: 8, fontSize: 12 }}>
+                            {Math.round(kcal)} kcal
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setCompareFood(food);
+                          setUsdaOpen(false);
+                          setUsdaResults([]);
+                          setHoveredFood(null);
+                        }}
+                        style={{
+                          flexShrink: 0,
+                          margin: "0 10px",
+                          padding: "4px 10px",
+                          background: "#667eea",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Compare
+                      </button>
+                    </div>
                   );
                 })}
               </div>

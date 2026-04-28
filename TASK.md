@@ -1,10 +1,13 @@
-# Task: Create custom goals
+# Task: Allow Comparison Originating from USDA Food
 
 ## Status: Incomplete
 
 ## Steps
-- [ ] 1. Add to initial login setup modal questions such as experience level, goals (lose weight, lose fat, maintain, gain weight, gain muscle, mixtures of those), height, weight, age, gender (suggest any you deem relevant)
-- [ ] 2. Create adjustable targets such as a protein goal that is greater than 160 grams of protein and less than 200 grams of protein, for example. Same for other macros (optional though, users should also be able to have goals that are over or under a single value)
-- [ ] 3. Adjust conditions for days being marked as green depending on the user's custom goals
+
+- [ ] 1. Find in Nutrition.jsx where the dropdown menu for foods found in USDA database is
+- [ ] 2. Create button in the dropdown from step 1 that is the same as the "Compare" button for foods in "My Food Library"
+- [ ] 3. Mimic the comparison or use the same component "NutrientCompare.jsx"
 
 ## Notes
+
+- Allow the comparison of USDA Foods with other foods and foods in "My Food Library"
