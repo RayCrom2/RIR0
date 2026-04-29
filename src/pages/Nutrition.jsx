@@ -146,7 +146,16 @@ export default function Nutrition() {
 
   const filteredSortedFoods = (() => {
     const q = myFoodsSearch.trim().toLowerCase();
-    let list = q ? savedFoods.filter((f) => f.name.toLowerCase().includes(q)) : [...savedFoods];
+    if (q) {
+      const matches = savedFoods.filter((f) => f.name.toLowerCase().includes(q));
+      return matches.sort((a, b) => {
+        const aStarts = a.name.toLowerCase().startsWith(q);
+        const bStarts = b.name.toLowerCase().startsWith(q);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    let list = [...savedFoods];
     switch (myFoodsSort) {
       case "name_asc":  list.sort((a, b) => a.name.localeCompare(b.name)); break;
       case "name_desc": list.sort((a, b) => b.name.localeCompare(a.name)); break;
@@ -1144,7 +1153,9 @@ export default function Nutrition() {
                 <select
                   value={myFoodsSort}
                   onChange={(e) => setMyFoodsSort(e.target.value)}
-                  style={{ padding: "6px 8px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: "pointer", outline: "none", color: "#555" }}
+                  disabled={!!myFoodsSearch.trim()}
+                  title={myFoodsSearch.trim() ? "Sort disabled while searching" : undefined}
+                  style={{ padding: "6px 8px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
                 >
                   <option value="name_asc">Name A→Z</option>
                   <option value="name_desc">Name Z→A</option>
@@ -1599,49 +1610,55 @@ export default function Nutrition() {
                     </td>
                     <td
                       style={{
-                        padding: "10px 12px",
+                        padding: "6px 12px",
                         textAlign: "center",
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {!savedFoods.some(
-                        (f) =>
-                          f.name.toLowerCase() ===
-                          entry.food_name.toLowerCase(),
-                      ) ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {!savedFoods.some(
+                          (f) =>
+                            f.name.toLowerCase() ===
+                            entry.food_name.toLowerCase(),
+                        ) ? (
+                          <button
+                            onClick={() => handleSaveEntryToMyFoods(entry)}
+                            style={{
+                              background: "#f0f7ff",
+                              border: "1px solid #c8e0ff",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              color: "#4f8ef7",
+                              fontSize: 14,
+                              lineHeight: 1,
+                              padding: "5px 8px",
+                              minWidth: 32,
+                            }}
+                            title="Save to My Food Library"
+                          >
+                            ☆
+                          </button>
+                        ) : (
+                          <div style={{ minWidth: 32, height: 26 }} />
+                        )}
                         <button
-                          onClick={() => handleSaveEntryToMyFoods(entry)}
+                          onClick={() => handleDelete(entry.id)}
                           style={{
-                            background: "none",
-                            border: "none",
+                            background: "#fff0f0",
+                            border: "1px solid #ffc8c8",
+                            borderRadius: 6,
                             cursor: "pointer",
-                            color: "#aaa",
-                            fontSize: 18,
+                            color: "#e05c5c",
+                            fontSize: 14,
                             lineHeight: 1,
-                            padding: 4,
+                            padding: "5px 8px",
+                            minWidth: 32,
                           }}
-                          title="Save to My Food Library"
+                          title="Remove"
                         >
-                          ☆
+                          ✕
                         </button>
-                      ) : (
-                        <span style={{ display: "inline-block", width: 26 }} />
-                      )}
-                      <button
-                        onClick={() => handleDelete(entry.id)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "#ccc",
-                          fontSize: 16,
-                          lineHeight: 1,
-                          padding: 4,
-                        }}
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
