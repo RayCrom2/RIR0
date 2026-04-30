@@ -1,5 +1,6 @@
 import React from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
+import { MdRestaurant, MdFitnessCenter, MdAccessibility, MdPerson } from 'react-icons/md'
 import DiagramPage from './pages/DiagramPage'
 import Videos from './pages/Videos'
 import Nutrition from './pages/Nutrition'
@@ -54,6 +55,45 @@ function NavAuth() {
   );
 }
 
+function BottomNav() {
+  const { user, setModalOpen } = useAuth();
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const initial = (user?.user_metadata?.full_name || user?.email || '?')[0]?.toUpperCase();
+  return (
+    <nav className="bottom-nav">
+      <NavLink to="/nutrition" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
+        <MdRestaurant size={24} />
+        <span>Nutrition</span>
+      </NavLink>
+      <NavLink to="/exerciselogger" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
+        <MdFitnessCenter size={24} />
+        <span>Exercise</span>
+      </NavLink>
+      <NavLink to="/diagram" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
+        <MdAccessibility size={24} />
+        <span>Diagram</span>
+      </NavLink>
+      {user ? (
+        <NavLink to="/profile" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="avatar" style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#ff8c42', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+              {initial}
+            </div>
+          )}
+          <span>Profile</span>
+        </NavLink>
+      ) : (
+        <button className="bottom-nav-item" onClick={() => setModalOpen(true)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>
+          <MdPerson size={24} />
+          <span>Sign In</span>
+        </button>
+      )}
+    </nav>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -81,6 +121,7 @@ export default function App() {
 
         <AuthModal />
         <OnboardingModal />
+        <BottomNav />
       </div>
     </AuthProvider>
   )

@@ -169,7 +169,7 @@ export default function Profile() {
             {initial}
           </div>
         )}
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           {displayName && displayName !== user.email && (
             <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>
               {displayName}
@@ -179,6 +179,12 @@ export default function Profile() {
             {user.email}
           </p>
         </div>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#555', flexShrink: 0 }}
+        >
+          Sign Out
+        </button>
       </div>
 
       {loading ? (
