@@ -105,10 +105,6 @@ function BottomNav() {
         <MdFitnessCenter size={24} />
         <span>Exercise</span>
       </NavLink>
-      <NavLink to="/diagram" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
-        <MdAccessibility size={24} />
-        <span>Diagram</span>
-      </NavLink>
       {user ? (
         <NavLink to="/profile" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
           {avatarUrl ? (

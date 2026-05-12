@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LuCalendar } from "react-icons/lu";
+import { MdEdit, MdKeyboardArrowUp, MdKeyboardArrowDown } from "react-icons/md";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import UsdaNutrientCard from "../components/UsdaNutrientCard";
@@ -127,12 +128,29 @@ export default function Nutrition() {
   const [hoveredFood, setHoveredFood] = useState(null);
   const [hoveredLibraryId, setHoveredLibraryId] = useState(null);
   const [pinnedFood, setPinnedFood] = useState(null);
+  const [pinnedLibraryFood, setPinnedLibraryFood] = useState(null);
+  const [editingLibraryFood, setEditingLibraryFood] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const [compareFood, setCompareFood] = useState(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 767px)").matches);
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
+  const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
+  const [weightToday, setWeightToday] = useState(null);
+  const [weightInput, setWeightInput] = useState("");
+  const WEIGHT_DISMISS_KEY = "rir0_weight_dismissed";
+  const toastTimer = useRef(null);
   const menuRef = useRef(null);
   const usdaRef = useRef(null);
+  const pinnedSheetRef = useRef(null);
+  const pinnedDragStart = useRef(null);
+
+  function showToast(message, color = "#22c55e") {
+    clearTimeout(toastTimer.current);
+    setToast({ visible: true, color, message });
+    toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2500);
+  }
   const usdaDebounce = useRef(null);
   const containerRef = useRef(null);
 
@@ -216,9 +234,21 @@ export default function Nutrition() {
       .gte("logged_at", todayStr())
       .lt("logged_at", tomorrowStr())
       .order("logged_time")
-      .then(({ data, error }) => {
+      .then(({ data }) => {
         setEntries(data || []);
+        setEntriesLoaded(true);
       });
+  }, [user, loading]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    supabase
+      .from("weight_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .eq("date", todayStr())
+      .maybeSingle()
+      .then(({ data }) => setWeightToday(data ? Number(data.weight_kg) : false));
   }, [user, loading]);
 
   useEffect(() => {
@@ -341,6 +371,7 @@ export default function Nutrition() {
         const next = [...entries, data];
         setEntries(next);
         upsertDailyStatus(todayStr(), next, goals, u.id);
+        showToast("Food logged successfully");
       }
       setSelectedUsdaFood(null);
       setServingInput("");
@@ -394,6 +425,7 @@ export default function Nutrition() {
         const next = [...entries, data];
         setEntries(next);
         upsertDailyStatus(todayStr(), next, goals, u.id);
+        showToast("Food logged successfully");
       }
       setForm(EMPTY_FORM);
     });
@@ -445,6 +477,7 @@ export default function Nutrition() {
     const next = entries.filter((e) => e.id !== id);
     setEntries(next);
     if (user) upsertDailyStatus(todayStr(), next, goals, user.id);
+    showToast("Food removed", "#ef4444");
   }
 
   async function handleClearAll() {
@@ -500,6 +533,7 @@ export default function Nutrition() {
         const nextEntries = [...entries, data];
         setEntries(nextEntries);
         upsertDailyStatus(todayStr(), nextEntries, goals, u.id);
+        showToast("Food logged successfully");
       }
       setLibraryAmounts((prev) => {
         const next = { ...prev };
@@ -545,6 +579,56 @@ export default function Nutrition() {
   async function handleDeleteSaved(id) {
     await supabase.from("custom_foods").delete().eq("id", id);
     setSavedFoods((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  async function handleLogWeight() {
+    if (!user || !weightInput) return;
+    const prefUnit = goals.preferred_weight_unit || "kg";
+    const kg = prefUnit === "lbs"
+      ? Math.round(Number(weightInput) / 2.20462 * 10) / 10
+      : Number(weightInput);
+    await supabase.from("weight_logs").upsert(
+      { user_id: user.id, date: todayStr(), weight_kg: kg },
+      { onConflict: "user_id,date" }
+    );
+    setWeightToday(kg);
+    setWeightInput("");
+  }
+
+  function openEditFromPinned() {
+    if (!pinnedLibraryFood) return;
+    setEditForm({
+      name: pinnedLibraryFood.name || "",
+      calories: String(pinnedLibraryFood.calories ?? ""),
+      protein: String(pinnedLibraryFood.protein ?? ""),
+      carbs: String(pinnedLibraryFood.carbs ?? ""),
+      fat: String(pinnedLibraryFood.fat ?? ""),
+      fiber: String(pinnedLibraryFood.fiber ?? ""),
+      sugar: String(pinnedLibraryFood.sugar ?? ""),
+      serving_amount: String(pinnedLibraryFood.serving_amount ?? ""),
+      serving_unit: pinnedLibraryFood.serving_unit || "g",
+    });
+    setEditingLibraryFood(pinnedLibraryFood);
+    setPinnedFood(null);
+    setPinnedLibraryFood(null);
+  }
+
+  async function handleEditSave() {
+    if (!editingLibraryFood || !user) return;
+    const updated = {
+      name: editForm.name.trim(),
+      calories: Number(editForm.calories) || 0,
+      protein: Number(editForm.protein) || 0,
+      carbs: Number(editForm.carbs) || 0,
+      fat: Number(editForm.fat) || 0,
+      fiber: Number(editForm.fiber) || 0,
+      sugar: Number(editForm.sugar) || 0,
+      serving_amount: editForm.serving_amount ? Number(editForm.serving_amount) : null,
+      serving_unit: editForm.serving_unit || "g",
+    };
+    await supabase.from("custom_foods").update(updated).eq("id", editingLibraryFood.id);
+    setSavedFoods((prev) => prev.map((f) => f.id === editingLibraryFood.id ? { ...f, ...updated } : f));
+    setEditingLibraryFood(null);
   }
 
   const sortedEntries = [...entries].sort((a, b) => parseLoggedTime(a.logged_time) - parseLoggedTime(b.logged_time));
@@ -743,6 +827,55 @@ export default function Nutrition() {
         })}
       </div>
 
+      {/* Daily weigh-in prompt */}
+      {user && entriesLoaded && entries.length === 0 && weightToday === false
+        && localStorage.getItem(WEIGHT_DISMISS_KEY) !== todayStr()
+        && !goals.hide_weight_prompt && (
+        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", marginBottom: 24 }}>
+          <p style={{ fontWeight: 700, fontSize: 15, margin: "0 0 2px", color: "#333" }}>How much do you weigh today?</p>
+          <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 14px" }}>Tracking your weight helps monitor progress over time.</p>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={weightInput}
+              onChange={e => setWeightInput(e.target.value)}
+              placeholder={goals.preferred_weight_unit === "lbs" ? "e.g. 170" : "e.g. 77"}
+              style={{ ...inputStyle(), flex: 1 }}
+            />
+            <span style={{ color: "#888", fontSize: 14, flexShrink: 0 }}>{goals.preferred_weight_unit || "kg"}</span>
+            <button
+              type="button"
+              onClick={handleLogWeight}
+              style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 700, cursor: "pointer", fontSize: 14, flexShrink: 0 }}
+            >
+              Log
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => { localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr()); setWeightToday(null); }}
+              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
+            >
+              Skip today
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!user) return;
+                await supabase.from("nutrition_goals").upsert({ user_id: user.id, hide_weight_prompt: true }, { onConflict: "user_id" });
+                setGoals(g => ({ ...g, hide_weight_prompt: true }));
+              }}
+              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
+            >
+              Turn off reminders
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Entry Form */}
       <div
         ref={containerRef}
@@ -914,7 +1047,7 @@ export default function Nutrition() {
             }}
             title="My Food Library"
           >
-            ☰
+            {myFoodsOpen ? <MdKeyboardArrowUp size={20} /> : <MdKeyboardArrowDown size={20} />}
           </button>
         </div>
 
@@ -1142,20 +1275,20 @@ export default function Nutrition() {
             </p>
           ) : (
             <div style={{ padding: "0 16px 16px", flex: 1, overflowY: "auto" }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0 }}>
                 <input
                   type="text"
                   value={myFoodsSearch}
                   onChange={(e) => setMyFoodsSearch(e.target.value)}
                   placeholder="Search saved foods…"
-                  style={{ flex: 1, padding: "6px 10px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, outline: "none", background: "#fafafa" }}
+                  style={{ flex: 1, minWidth: 0, padding: "6px 10px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, outline: "none", background: "#fafafa" }}
                 />
                 <select
                   value={myFoodsSort}
                   onChange={(e) => setMyFoodsSort(e.target.value)}
                   disabled={!!myFoodsSearch.trim()}
                   title={myFoodsSearch.trim() ? "Sort disabled while searching" : undefined}
-                  style={{ padding: "6px 8px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
+                  style={{ maxWidth: 130, padding: "6px 8px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
                 >
                   <option value="name_asc">Name A→Z</option>
                   <option value="name_desc">Name Z→A</option>
@@ -1163,9 +1296,9 @@ export default function Nutrition() {
                   <option value="calories">Highest Calories</option>
                   <option value="protein">Highest Protein</option>
                   <option value="fat">Highest Fat</option>
+                  <option value="fiber">Highest Fiber</option>
                   <option value="carbs">Highest Carbs</option>
                   <option value="sugar">Highest Sugar</option>
-                  <option value="fiber">Highest Fiber</option>
                 </select>
               </div>
               {filteredSortedFoods.length === 0 && (
@@ -1198,8 +1331,10 @@ export default function Nutrition() {
                     if (pinnedFood?.id === food.id) {
                       setPinnedFood(null);
                       setHoveredFood(null);
+                      setPinnedLibraryFood(null);
                     } else {
                       setPinnedFood(normalizedFood);
+                      setPinnedLibraryFood(food);
                     }
                   }}
                   onMouseEnter={(e) => {
@@ -1384,8 +1519,9 @@ export default function Nutrition() {
         ) : !isMobile && pinnedFood ? (
           <UsdaNutrientCard
             food={pinnedFood}
-            onClose={() => setPinnedFood(null)}
+            onClose={() => { setPinnedFood(null); setPinnedLibraryFood(null); }}
             onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
+            onEdit={pinnedLibraryFood ? openEditFromPinned : undefined}
           />
         ) : !isMobile && hoveredFood ? (
           <UsdaNutrientCard food={hoveredFood} />
@@ -1395,7 +1531,7 @@ export default function Nutrition() {
       {/* Mobile bottom sheet for pinned food */}
       {isMobile && pinnedFood && (
         <div
-          onMouseDown={() => { setPinnedFood(null); setHoveredFood(null); }}
+          onMouseDown={() => { setPinnedFood(null); setHoveredFood(null); setPinnedLibraryFood(null); }}
           style={{
             position: "fixed", inset: 0, zIndex: 400,
             background: "rgba(0,0,0,0.45)",
@@ -1403,7 +1539,29 @@ export default function Nutrition() {
           }}
         >
           <div
+            ref={pinnedSheetRef}
             onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              if (e.target.closest("button, input, select, a")) return;
+              pinnedDragStart.current = e.touches[0].clientY;
+              pinnedSheetRef.current.style.transition = "none";
+            }}
+            onTouchMove={(e) => {
+              if (pinnedDragStart.current === null) return;
+              const dy = e.touches[0].clientY - pinnedDragStart.current;
+              if (dy > 0) pinnedSheetRef.current.style.transform = `translateY(${dy}px)`;
+            }}
+            onTouchEnd={(e) => {
+              if (pinnedDragStart.current === null) return;
+              const dy = e.changedTouches[0].clientY - pinnedDragStart.current;
+              pinnedDragStart.current = null;
+              if (dy > 80) {
+                setPinnedFood(null); setHoveredFood(null); setPinnedLibraryFood(null);
+              } else {
+                pinnedSheetRef.current.style.transition = "transform 0.2s";
+                pinnedSheetRef.current.style.transform = "";
+              }
+            }}
             style={{
               width: "100%",
               background: "#fff",
@@ -1414,10 +1572,23 @@ export default function Nutrition() {
               boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
             }}
           >
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ flex: 1 }} />
+              <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0" }} />
+              <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+                {pinnedLibraryFood && (
+                  <button
+                    onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); openEditFromPinned(); }}
+                    onClick={openEditFromPinned}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", padding: "8px 4px", lineHeight: 1 }}
+                  >
+                    <MdEdit size={22} />
+                  </button>
+                )}
+              </div>
+            </div>
             <UsdaNutrientCard
               food={pinnedFood}
-              onClose={() => { setPinnedFood(null); setHoveredFood(null); }}
               onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
               style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
             />
@@ -1467,6 +1638,78 @@ export default function Nutrition() {
               }))}
               style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Edit library food modal */}
+      {editingLibraryFood && (
+        <div
+          onMouseDown={() => setEditingLibraryFood(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Edit Food</span>
+              <button onClick={() => setEditingLibraryFood(null)} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+            {[
+              { key: "name", label: "Name", type: "text" },
+              { key: "calories", label: "Calories (kcal)", type: "number" },
+              { key: "protein", label: "Protein (g)", type: "number" },
+              { key: "carbs", label: "Carbs (g)", type: "number" },
+              { key: "fat", label: "Fat (g)", type: "number" },
+              { key: "fiber", label: "Fiber (g)", type: "number" },
+              { key: "sugar", label: "Sugar (g)", type: "number" },
+            ].map(({ key, label, type }) => (
+              <div key={key} style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>{label}</label>
+                <input
+                  type={type}
+                  value={editForm[key]}
+                  onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Serving amount</label>
+                <input
+                  type="number"
+                  value={editForm.serving_amount}
+                  onChange={(e) => setEditForm((f) => ({ ...f, serving_amount: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Unit</label>
+                <select
+                  value={editForm.serving_unit}
+                  onChange={(e) => setEditForm((f) => ({ ...f, serving_unit: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", background: "#fafafa" }}
+                >
+                  {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => setEditingLibraryFood(null)}
+                style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditSave}
+                style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1707,6 +1950,30 @@ export default function Nutrition() {
           onClose={() => setCalendarOpen(false)}
         />
       )}
+
+      {/* Logged toast */}
+      <div style={{
+        position: "fixed",
+        bottom: isMobile ? 90 : "auto",
+        top: isMobile ? "auto" : 20,
+        left: isMobile ? "50%" : "auto",
+        right: isMobile ? "auto" : 20,
+        transform: isMobile ? `translateX(-50%) translateY(${toast.visible ? 0 : 20}px)` : `translateY(${toast.visible ? 0 : -10}px)`,
+        opacity: toast.visible ? 1 : 0,
+        pointerEvents: "none",
+        transition: "opacity 0.25s, transform 0.25s",
+        background: toast.color,
+        color: "#fff",
+        borderRadius: 999,
+        padding: "10px 20px",
+        fontSize: 14,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+        zIndex: 600,
+      }}>
+        {toast.message}
+      </div>
     </div>
   );
 }
