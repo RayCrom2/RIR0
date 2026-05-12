@@ -587,11 +587,18 @@ export default function Nutrition() {
     const kg = prefUnit === "lbs"
       ? Math.round(Number(weightInput) / 2.20462 * 10) / 10
       : Number(weightInput);
-    await supabase.from("weight_logs").upsert(
-      { user_id: user.id, date: todayStr(), weight_kg: kg },
-      { onConflict: "user_id,date" }
-    );
+    await Promise.all([
+      supabase.from("weight_logs").upsert(
+        { user_id: user.id, date: todayStr(), weight_kg: kg },
+        { onConflict: "user_id,date" }
+      ),
+      supabase.from("nutrition_goals").upsert(
+        { user_id: user.id, weight_kg: kg },
+        { onConflict: "user_id" }
+      ),
+    ]);
     setWeightToday(kg);
+    setGoals(g => ({ ...g, weight_kg: kg }));
     setWeightInput("");
   }
 
