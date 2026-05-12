@@ -9,8 +9,17 @@ function cmToFtIn(cm) {
 function ftInToCm(ft, inch) {
   return Math.round((Number(ft || 0) * 12 + Number(inch || 0)) * 2.54);
 }
-function kgToLbs(kg) { return Math.round(Number(kg) * 2.20462); }
+function kgToLbs(kg) { return Math.round(Number(kg) * 2.20462 * 10) / 10; }
 function lbsToKg(lbs) { return Math.round(Number(lbs) / 2.20462 * 10) / 10; }
+function ageFromDob(dob) {
+  if (!dob) return null;
+  const today = new Date();
+  const birth = new Date(dob + "T00:00:00");
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 const MACRO_FIELDS = [
   { key: "calories", minKey: "calories_min", dirKey: "calories_dir", label: "Calories", unit: "kcal", color: "#ff8c42", defaultDir: "below" },
@@ -41,8 +50,10 @@ const DEFAULT_GOALS = {
   fat_min: null, fiber_min: null, sugar_min: null,
   calories_dir: "below", protein_dir: "above", carbs_dir: "below",
   fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
-  gender: "male", age: "", height_cm: "", weight_kg: "",
+  gender: "male", date_of_birth: "", height_cm: "", weight_kg: "",
   experience_level: "beginner", fitness_goal: "maintain",
+  preferred_weight_unit: "kg", preferred_height_unit: "cm",
+  hide_weight_prompt: false,
 };
 
 export default function Profile() {
@@ -56,10 +67,14 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [weightLogs, setWeightLogs] = useState([]);
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const displayName = user?.user_metadata?.full_name || user?.email || "";
   const initial = displayName[0]?.toUpperCase() || "?";
+
+  // Body stats are locked once height + dob are set from onboarding
+  const locked = !!(goals.height_cm && (goals.date_of_birth || goals.age));
 
   useEffect(() => {
     if (!user) return;
@@ -76,17 +91,29 @@ export default function Profile() {
             if (data[f.minKey] != null) enabled[f.key] = true;
           });
           setRangeEnabled(enabled);
-          if (data.height_cm) { const c = cmToFtIn(data.height_cm); setFtIn({ ft: String(c.ft), in: String(c.in) }); }
+          const hu = data.preferred_height_unit || "cm";
+          const wu = data.preferred_weight_unit || "kg";
+          setHeightUnit(hu);
+          setWeightUnit(wu);
+          if (data.height_cm) {
+            const c = cmToFtIn(data.height_cm);
+            setFtIn({ ft: String(c.ft), in: String(c.in) });
+          }
           if (data.weight_kg) setLbsVal(String(kgToLbs(data.weight_kg)));
         }
         setLoading(false);
       });
+    supabase
+      .from("weight_logs")
+      .select("date, weight_kg")
+      .eq("user_id", user.id)
+      .order("date")
+      .then(({ data }) => { if (data) setWeightLogs(data); });
   }, [user]);
 
   function setG(key, val) {
     setGoals(g => ({ ...g, [key]: val === "" ? null : (isNaN(Number(val)) ? val : Number(val)) }));
   }
-
   function setGStr(key, val) {
     setGoals(g => ({ ...g, [key]: val }));
   }
@@ -98,6 +125,7 @@ export default function Profile() {
       const cm = ftInToCm(ftIn.ft, ftIn.in); if (cm) setGStr("height_cm", cm);
     }
     setHeightUnit(unit);
+    setGStr("preferred_height_unit", unit);
   }
   function handleFtIn(field, val) {
     const next = { ...ftIn, [field]: val };
@@ -111,12 +139,12 @@ export default function Profile() {
       const kg = lbsToKg(lbsVal); if (kg) setGStr("weight_kg", kg);
     }
     setWeightUnit(unit);
+    setGStr("preferred_weight_unit", unit);
   }
   function handleLbs(val) {
     setLbsVal(val);
     setGStr("weight_kg", lbsToKg(val));
   }
-
   function toggleRange(key, minKey) {
     const next = !rangeEnabled[key];
     setRangeEnabled(r => ({ ...r, [key]: next }));
@@ -128,7 +156,10 @@ export default function Profile() {
     setSaving(true);
     await supabase
       .from("nutrition_goals")
-      .upsert({ user_id: user.id, ...goals }, { onConflict: "user_id" });
+      .upsert(
+        { user_id: user.id, ...goals, preferred_height_unit: heightUnit, preferred_weight_unit: weightUnit },
+        { onConflict: "user_id" }
+      );
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -142,6 +173,18 @@ export default function Profile() {
     );
   }
 
+  const dobDisplay = (goals.date_of_birth)
+    ? new Date(goals.date_of_birth + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "";
+  const age = ageFromDob(goals.date_of_birth);
+
+  const heightDisplay = goals.height_cm
+    ? (heightUnit === "cm" ? `${goals.height_cm} cm` : `${ftIn.ft}′ ${ftIn.in}″`)
+    : "—";
+  const weightDisplay = goals.weight_kg
+    ? (weightUnit === "kg" ? `${goals.weight_kg} kg` : `${lbsVal} lbs`)
+    : "—";
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
       <p className="font-bold text-[2rem] mb-1">Profile</p>
@@ -154,34 +197,21 @@ export default function Profile() {
         display: "flex", alignItems: "center", gap: 16,
       }}>
         {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt="avatar"
-            style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-          />
+          <img src={avatarUrl} alt="avatar" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
         ) : (
-          <div style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: "#ff8c42", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 22, fontWeight: 700, flexShrink: 0,
-          }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ff8c42", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>
             {initial}
           </div>
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
           {displayName && displayName !== user.email && (
-            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>
-              {displayName}
-            </p>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>{displayName}</p>
           )}
-          <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {user.email}
-          </p>
+          <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</p>
         </div>
         <button
           onClick={() => supabase.auth.signOut()}
-          style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#555', flexShrink: 0 }}
+          style={{ background: "none", border: "1px solid #e0e0e0", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#555", flexShrink: 0 }}
         >
           Sign Out
         </button>
@@ -192,69 +222,96 @@ export default function Profile() {
       ) : (
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* About you */}
+          {/* About You */}
           <Section title="About You">
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <FieldRow label="Gender">
                 <div style={{ display: "flex", gap: 8 }}>
                   {["male", "female", "other"].map(g => (
-                    <button key={g} type="button" onClick={() => setGStr("gender", g)}
-                      style={{ ...chipBtn, background: goals.gender === g ? "#ff8c42" : "#f7f7fb", color: goals.gender === g ? "#fff" : "#555" }}>
+                    <button key={g} type="button"
+                      onClick={() => !locked && setGStr("gender", g)}
+                      style={{ ...chipBtn, background: goals.gender === g ? "#ff8c42" : "#f7f7fb", color: goals.gender === g ? "#fff" : "#555", opacity: locked && goals.gender !== g ? 0.35 : 1, cursor: locked ? "default" : "pointer" }}>
                       {g.charAt(0).toUpperCase() + g.slice(1)}
                     </button>
                   ))}
                 </div>
               </FieldRow>
-              <FieldRow label="Age" unit="yrs">
-                <input type="number" min="10" max="100" value={goals.age ?? ""}
-                  onChange={e => setG("age", e.target.value)} style={numInput} />
-              </FieldRow>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Height</span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {["cm", "ftin"].map(u => (
-                    <button key={u} type="button" onClick={() => toggleHeightUnit(u)}
-                      style={{ ...unitToggle, background: heightUnit === u ? "#ff8c42" : "#f0f0f0", color: heightUnit === u ? "#fff" : "#888" }}>
-                      {u === "ftin" ? "ft/in" : "cm"}
-                    </button>
-                  ))}
-                </div>
-                {heightUnit === "cm" ? (
-                  <input type="number" min="100" max="250" step="0.1" value={goals.height_cm ?? ""}
-                    onChange={e => setGStr("height_cm", Number(e.target.value))} style={numInput} />
+
+              <FieldRow label="Date of Birth">
+                {locked ? (
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{dobDisplay || "—"}</span>
+                    {age !== null && <span style={{ fontSize: 12, color: "#aaa", display: "block" }}>Age {age}</span>}
+                  </div>
                 ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <input type="number" min="4" max="8" value={ftIn.ft}
-                      onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" style={{ ...numInput, width: 52 }} />
-                    <input type="number" min="0" max="11" value={ftIn.in}
-                      onChange={e => handleFtIn("in", e.target.value)} placeholder="in" style={{ ...numInput, width: 52 }} />
+                  <input
+                    type="date"
+                    value={goals.date_of_birth ?? ""}
+                    max={new Date().toISOString().split("T")[0]}
+                    onChange={e => setGStr("date_of_birth", e.target.value)}
+                    style={{ ...numInput, width: "auto", fontSize: 14, textAlign: "left" }}
+                  />
+                )}
+              </FieldRow>
+
+              <FieldRow label="Height">
+                {locked ? (
+                  <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{heightDisplay}</span>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {heightUnit === "cm" ? (
+                      <>
+                        <input type="number" min="100" max="250" step="0.1" value={goals.height_cm ?? ""}
+                          onChange={e => setGStr("height_cm", Number(e.target.value))} style={{ ...numInput, width: 72 }} />
+                        <span style={{ fontSize: 12, color: "#aaa" }}>cm</span>
+                      </>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input type="number" min="4" max="8" value={ftIn.ft}
+                          onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" style={{ ...numInput, width: 52 }} />
+                        <span style={{ fontSize: 12, color: "#aaa" }}>ft</span>
+                        <input type="number" min="0" max="11" value={ftIn.in}
+                          onChange={e => handleFtIn("in", e.target.value)} placeholder="in" style={{ ...numInput, width: 52 }} />
+                        <span style={{ fontSize: 12, color: "#aaa" }}>in</span>
+                      </div>
+                    )}
                   </div>
                 )}
-                {heightUnit === "cm" && <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>cm</span>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Weight</span>
-                <div style={{ display: "flex", gap: 4 }}>
+              </FieldRow>
+
+              <FieldRow label="Starting weight">
+                <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{weightDisplay}</span>
+              </FieldRow>
+            </div>
+          </Section>
+
+          {/* Units */}
+          <Section title="Units">
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <FieldRow label="Weight">
+                <div style={{ display: "flex", gap: 8 }}>
                   {["kg", "lbs"].map(u => (
                     <button key={u} type="button" onClick={() => toggleWeightUnit(u)}
-                      style={{ ...unitToggle, background: weightUnit === u ? "#ff8c42" : "#f0f0f0", color: weightUnit === u ? "#fff" : "#888" }}>
+                      style={{ ...chipBtn, background: weightUnit === u ? "#ff8c42" : "#f7f7fb", color: weightUnit === u ? "#fff" : "#555" }}>
                       {u}
                     </button>
                   ))}
                 </div>
-                {weightUnit === "kg" ? (
-                  <input type="number" min="30" max="300" step="0.1" value={goals.weight_kg ?? ""}
-                    onChange={e => setGStr("weight_kg", Number(e.target.value))} style={numInput} />
-                ) : (
-                  <input type="number" min="66" max="660" value={lbsVal}
-                    onChange={e => handleLbs(e.target.value)} style={numInput} />
-                )}
-                <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
-              </div>
+              </FieldRow>
+              <FieldRow label="Height">
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["cm", "ftin"].map(u => (
+                    <button key={u} type="button" onClick={() => toggleHeightUnit(u)}
+                      style={{ ...chipBtn, background: heightUnit === u ? "#ff8c42" : "#f7f7fb", color: heightUnit === u ? "#fff" : "#555" }}>
+                      {u === "ftin" ? "ft / in" : "cm"}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
             </div>
           </Section>
 
-          {/* Fitness goal */}
+          {/* Fitness Goal */}
           <Section title="Fitness Goal">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
@@ -288,7 +345,7 @@ export default function Profile() {
             </div>
           </Section>
 
-          {/* Macro targets */}
+          {/* Daily Nutrition Goals */}
           <Section title="Daily Nutrition Goals" subtitle="Toggle '+ range' to set a min–max window instead of a single target.">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {MACRO_FIELDS.map(f => (
@@ -334,6 +391,30 @@ export default function Profile() {
             </div>
           </Section>
 
+          {/* Weight History */}
+          <Section title="Weight History">
+            {weightLogs.length === 0 ? (
+              <p style={{ color: "#bbb", fontSize: 13, textAlign: "center", padding: "12px 0", margin: 0 }}>
+                No weigh-ins recorded yet. Log your weight daily from the Nutrition page.
+              </p>
+            ) : (
+              <WeightGraph logs={weightLogs} unit={weightUnit} />
+            )}
+          </Section>
+
+          {/* Notifications */}
+          <Section title="Notifications">
+            <FieldRow label="Daily weigh-in prompt">
+              <button
+                type="button"
+                onClick={() => setGStr("hide_weight_prompt", !goals.hide_weight_prompt)}
+                style={{ ...chipBtn, background: goals.hide_weight_prompt ? "#f0f0f0" : "#ff8c42", color: goals.hide_weight_prompt ? "#aaa" : "#fff", fontSize: 12, padding: "5px 14px" }}
+              >
+                {goals.hide_weight_prompt ? "Off" : "On"}
+              </button>
+            </FieldRow>
+          </Section>
+
           <button
             type="submit"
             disabled={saving}
@@ -355,13 +436,100 @@ export default function Profile() {
   );
 }
 
+function WeightGraph({ logs, unit }) {
+  const [filter, setFilter] = useState("1M");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const toDisplay = (kg) => unit === "lbs" ? Math.round(Number(kg) * 2.20462 * 10) / 10 : Number(kg);
+
+  const now = new Date();
+  let cutoff, cutoffEnd;
+  if (filter === "Custom") {
+    cutoff = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
+    cutoffEnd = customTo ? new Date(customTo + "T23:59:59") : now;
+  } else {
+    const days = { "1W": 7, "1M": 30, "3M": 90, "1Y": 365, "All": Infinity }[filter];
+    cutoff = days === Infinity ? new Date(0) : new Date(now - days * 86400000);
+    cutoffEnd = now;
+  }
+
+  const filtered = logs
+    .filter(l => { const d = new Date(l.date + "T00:00:00"); return d >= cutoff && d <= cutoffEnd; })
+    .map(l => ({ t: new Date(l.date + "T00:00:00").getTime(), w: toDisplay(l.weight_kg) }))
+    .sort((a, b) => a.t - b.t);
+
+  const W = 340, H = 160;
+  const pad = { t: 16, r: 16, b: 30, l: 44 };
+  const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
+
+  const fmtDate = t => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        {["1W", "1M", "3M", "1Y", "All", "Custom"].map(f => (
+          <button key={f} type="button" onClick={() => setFilter(f)}
+            style={{ border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600, background: filter === f ? "#ff8c42" : "#f0f0f0", color: filter === f ? "#fff" : "#555" }}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {filter === "Custom" && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+          <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+            style={{ flex: 1, padding: "6px 8px", border: "1px solid #e0e0e0", borderRadius: 7, fontSize: 14, outline: "none" }} />
+          <span style={{ color: "#aaa", fontSize: 13 }}>–</span>
+          <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+            style={{ flex: 1, padding: "6px 8px", border: "1px solid #e0e0e0", borderRadius: 7, fontSize: 14, outline: "none" }} />
+        </div>
+      )}
+
+      {filtered.length < 2 ? (
+        <p style={{ color: "#bbb", fontSize: 13, textAlign: "center", padding: "16px 0", margin: 0 }}>
+          {filtered.length === 0 ? "No data for this period." : "Need at least 2 weigh-ins to show a graph."}
+        </p>
+      ) : (() => {
+        const ts = filtered.map(l => l.t), ws = filtered.map(l => l.w);
+        const minT = ts[0], maxT = ts[ts.length - 1];
+        const minW = Math.min(...ws), maxW = Math.max(...ws);
+        const wRange = maxW - minW || 0.5;
+        const xS = t => pad.l + (maxT === minT ? iW / 2 : (t - minT) / (maxT - minT) * iW);
+        const yS = w => pad.t + iH - (w - minW) / wRange * iH;
+        const pts = filtered.map(l => `${xS(l.t)},${yS(l.w)}`).join(" ");
+        const midW = (minW + maxW) / 2;
+        return (
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", overflow: "visible" }}>
+            {[minW, midW, maxW].map((w, i) => {
+              const y = yS(w);
+              return (
+                <g key={i}>
+                  <line x1={pad.l} y1={y} x2={pad.l + iW} y2={y} stroke="#f0f0f0" strokeWidth="1" />
+                  <text x={pad.l - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#bbb">{Math.round(w)}</text>
+                </g>
+              );
+            })}
+            <polyline points={pts} fill="none" stroke="#ff8c42" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+            {filtered.map((l, i) => (
+              <circle key={i} cx={xS(l.t)} cy={yS(l.w)} r="3.5" fill="#ff8c42" />
+            ))}
+            <text x={xS(minT)} y={H - 4} textAnchor="start" fontSize="10" fill="#bbb">{fmtDate(minT)}</text>
+            <text x={xS(maxT)} y={H - 4} textAnchor="end" fontSize="10" fill="#bbb">{fmtDate(maxT)}</text>
+          </svg>
+        );
+      })()}
+
+      <p style={{ textAlign: "right", fontSize: 12, color: "#aaa", margin: "4px 0 0" }}>
+        {filtered.length} weigh-in{filtered.length !== 1 ? "s" : ""} · {unit}
+      </p>
+    </div>
+  );
+}
+
 function Section({ title, subtitle, children }) {
   return (
-    <div style={{
-      background: "#fff", borderRadius: 12,
-      padding: "20px 20px",
-      boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
-    }}>
+    <div style={{ background: "#fff", borderRadius: 12, padding: "20px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)" }}>
       <h3 style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700 }}>{title}</h3>
       {subtitle && <p style={{ margin: "0 0 14px", fontSize: 12, color: "#888" }}>{subtitle}</p>}
       {!subtitle && <div style={{ marginBottom: 14 }} />}

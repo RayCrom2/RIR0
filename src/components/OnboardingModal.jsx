@@ -35,7 +35,18 @@ function ftInToCm(ft, inch) {
 function kgToLbs(kg) { return Math.round(Number(kg) * 2.20462); }
 function lbsToKg(lbs) { return Math.round(Number(lbs) / 2.20462 * 10) / 10; }
 
-function calculateMacros({ gender, age, height_cm, weight_kg, fitness_goal }) {
+function ageFromDob(dob) {
+  if (!dob) return null;
+  const today = new Date();
+  const birth = new Date(dob + "T00:00:00");
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function calculateMacros({ gender, date_of_birth, height_cm, weight_kg, fitness_goal }) {
+  const age = ageFromDob(date_of_birth);
   if (!weight_kg || !height_cm || !age) return null;
   const bmr = gender === "male"
     ? 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
@@ -57,7 +68,7 @@ export default function OnboardingModal() {
   const [saving, setSaving] = useState(false);
 
   const [profile, setProfile] = useState({
-    gender: "male", age: "", height_cm: "", weight_kg: "",
+    gender: "male", date_of_birth: "", height_cm: "", weight_kg: "",
     experience_level: "beginner", fitness_goal: "maintain",
   });
 
@@ -119,14 +130,14 @@ export default function OnboardingModal() {
   async function handleSave() {
     setSaving(true);
     await supabase.from("nutrition_goals").upsert(
-      { user_id: user.id, ...profile, ...macros },
+      { user_id: user.id, ...profile, ...macros, preferred_weight_unit: weightUnit, preferred_height_unit: heightUnit },
       { onConflict: "user_id" }
     );
     setNeedsOnboarding(false);
     setSaving(false);
   }
 
-  const canNext1 = profile.age && profile.height_cm && profile.weight_kg;
+  const canNext1 = profile.date_of_birth && profile.height_cm && profile.weight_kg;
 
   return (
     <div style={{
@@ -171,9 +182,11 @@ export default function OnboardingModal() {
                   ))}
                 </div>
               </div>
-              <Row label="Age" unit="yrs">
-                <input type="number" min="10" max="100" value={profile.age}
-                  onChange={e => setP("age", e.target.value)} style={numInput} />
+              <Row label="Date of Birth" unit="">
+                <input type="date" value={profile.date_of_birth}
+                  onChange={e => setP("date_of_birth", e.target.value)}
+                  max={new Date().toISOString().split("T")[0]}
+                  style={{ ...numInput, width: "auto", fontSize: 14, textAlign: "left" }} />
               </Row>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

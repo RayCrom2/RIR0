@@ -136,6 +136,10 @@ export default function Nutrition() {
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
   const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
+  const [entriesLoaded, setEntriesLoaded] = useState(false);
+  const [weightToday, setWeightToday] = useState(null);
+  const [weightInput, setWeightInput] = useState("");
+  const WEIGHT_DISMISS_KEY = "rir0_weight_dismissed";
   const toastTimer = useRef(null);
   const menuRef = useRef(null);
   const usdaRef = useRef(null);
@@ -230,9 +234,21 @@ export default function Nutrition() {
       .gte("logged_at", todayStr())
       .lt("logged_at", tomorrowStr())
       .order("logged_time")
-      .then(({ data, error }) => {
+      .then(({ data }) => {
         setEntries(data || []);
+        setEntriesLoaded(true);
       });
+  }, [user, loading]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    supabase
+      .from("weight_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .eq("date", todayStr())
+      .maybeSingle()
+      .then(({ data }) => setWeightToday(data ? Number(data.weight_kg) : false));
   }, [user, loading]);
 
   useEffect(() => {
@@ -565,6 +581,20 @@ export default function Nutrition() {
     setSavedFoods((prev) => prev.filter((f) => f.id !== id));
   }
 
+  async function handleLogWeight() {
+    if (!user || !weightInput) return;
+    const prefUnit = goals.preferred_weight_unit || "kg";
+    const kg = prefUnit === "lbs"
+      ? Math.round(Number(weightInput) / 2.20462 * 10) / 10
+      : Number(weightInput);
+    await supabase.from("weight_logs").upsert(
+      { user_id: user.id, date: todayStr(), weight_kg: kg },
+      { onConflict: "user_id,date" }
+    );
+    setWeightToday(kg);
+    setWeightInput("");
+  }
+
   function openEditFromPinned() {
     if (!pinnedLibraryFood) return;
     setEditForm({
@@ -796,6 +826,55 @@ export default function Nutrition() {
           );
         })}
       </div>
+
+      {/* Daily weigh-in prompt */}
+      {user && entriesLoaded && entries.length === 0 && weightToday === false
+        && localStorage.getItem(WEIGHT_DISMISS_KEY) !== todayStr()
+        && !goals.hide_weight_prompt && (
+        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", marginBottom: 24 }}>
+          <p style={{ fontWeight: 700, fontSize: 15, margin: "0 0 2px", color: "#333" }}>How much do you weigh today?</p>
+          <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 14px" }}>Tracking your weight helps monitor progress over time.</p>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={weightInput}
+              onChange={e => setWeightInput(e.target.value)}
+              placeholder={goals.preferred_weight_unit === "lbs" ? "e.g. 170" : "e.g. 77"}
+              style={{ ...inputStyle(), flex: 1 }}
+            />
+            <span style={{ color: "#888", fontSize: 14, flexShrink: 0 }}>{goals.preferred_weight_unit || "kg"}</span>
+            <button
+              type="button"
+              onClick={handleLogWeight}
+              style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 700, cursor: "pointer", fontSize: 14, flexShrink: 0 }}
+            >
+              Log
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => { localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr()); setWeightToday(null); }}
+              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
+            >
+              Skip today
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!user) return;
+                await supabase.from("nutrition_goals").upsert({ user_id: user.id, hide_weight_prompt: true }, { onConflict: "user_id" });
+                setGoals(g => ({ ...g, hide_weight_prompt: true }));
+              }}
+              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
+            >
+              Turn off reminders
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Entry Form */}
       <div
