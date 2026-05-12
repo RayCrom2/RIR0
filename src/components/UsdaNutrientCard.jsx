@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { MdEdit } from "react-icons/md";
 
 const NUTRIENTS = [
   { num: "208", label: "Calories", unit: "kcal", color: "#ff8c42" },
@@ -10,7 +11,7 @@ const NUTRIENTS = [
   { num: "307", label: "Sodium", unit: "mg", color: "#888" },
 ];
 
-export default function UsdaNutrientCard({ food, scale = 1, inline = false, style: styleProp = {}, onCompare, onClose }) {
+export default function UsdaNutrientCard({ food, scale = 1, inline = false, style: styleProp = {}, onCompare, onClose, onEdit }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -53,14 +54,18 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false, styl
             <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: "#333", lineHeight: 1.3, flex: 1, minWidth: 0 }}>
               {food.description}
             </p>
-            {onClose && (
-              <button
-                onClick={onClose}
-                style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", color: "#aaa", marginLeft: 8, lineHeight: 1, padding: 0, flexShrink: 0 }}
-              >
-                ✕
-              </button>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {onEdit && (
+                <button onClick={onEdit} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", padding: 0, lineHeight: 1 }} title="Edit food">
+                  <MdEdit size={15} />
+                </button>
+              )}
+              {onClose && (
+                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", color: "#aaa", lineHeight: 1, padding: 0 }}>
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
           {food.brandOwner && (
             <p style={{ margin: "0 0 8px", fontSize: 11, color: "#aaa" }}>{food.brandOwner}</p>

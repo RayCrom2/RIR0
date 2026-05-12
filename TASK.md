@@ -1,12 +1,11 @@
-# Task: Retain Workout on Application Close
+# Task: Turn Mobile into MVP
 
-## Status: Complete
+## Status: Completed
 
 ## Steps
 
-- [x] 1. Insert workout's current state to database after each change (addition and deletion)
-- [x] 2. Create state variable that inidcates whether a user is in the middle of a workout
+- [x] 1. Hide the Muscle Diagram currently for Mobile users
+- [x] 2. Create functionality on "My Food Library" food's to edit the name and nutrients when clicking a pencil icon on the modal tha tpops up when a food item is clicked on
 
 ## Notes
 
-- Compensate for bad or no connection by utilizing local storage and inserting it when connection is acquired
