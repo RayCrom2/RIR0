@@ -249,6 +249,7 @@ export default function ExerciseLogger() {
   const sSearchRef = useRef(null);
 
   const [inWorkout, setInWorkout] = useState(false);
+  const [prefWeightUnit, setPrefWeightUnit] = useState("lbs");
   const dbSaveTimer = useRef(null);
 
   // Derived session stats — only count sets marked done
@@ -288,6 +289,12 @@ export default function ExerciseLogger() {
       .eq("user_id", user.id)
       .order("created_at")
       .then(({ data }) => setRoutines(data || []));
+    supabase
+      .from("nutrition_goals")
+      .select("preferred_weight_unit")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => { if (data?.preferred_weight_unit) setPrefWeightUnit(data.preferred_weight_unit); });
   }, [user]);
 
   // ── load past workouts from Supabase when user changes
@@ -419,7 +426,7 @@ export default function ExerciseLogger() {
             done: false,
           },
         ];
-      return { name: ex.name, unit: ex.unit || "lbs", sets };
+      return { name: ex.name, unit: ex.unit || prefWeightUnit, sets };
     });
     setSessionExs(initialExs);
     setSSearch("");
@@ -459,7 +466,7 @@ export default function ExerciseLogger() {
     }
     setCExs((prev) => [
       ...prev,
-      { name: trimmed, unit: "lbs", sets: [{ reps: "", weight: "", rir: "" }] },
+      { name: trimmed, unit: prefWeightUnit, sets: [{ reps: "", weight: "", rir: "" }] },
     ]);
     setCSearch("");
     setCDropdownOpen(false);
@@ -565,7 +572,7 @@ export default function ExerciseLogger() {
       ...prev,
       {
         name: trimmed,
-        unit: "lbs",
+        unit: prefWeightUnit,
         sets: [{ reps: "", weight: "", rir: "", done: false }],
       },
     ]);
