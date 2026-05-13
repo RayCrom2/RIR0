@@ -50,7 +50,7 @@ const DEFAULT_GOALS = {
   fat_min: null, fiber_min: null, sugar_min: null,
   calories_dir: "below", protein_dir: "above", carbs_dir: "below",
   fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
-  gender: "male", date_of_birth: "", height_cm: "", weight_kg: "",
+  gender: "male", date_of_birth: "", height_cm: "", weight_kg: "", starting_weight_kg: "",
   experience_level: "beginner", fitness_goal: "maintain",
   preferred_weight_unit: "kg", preferred_height_unit: "cm",
   hide_weight_prompt: false,
@@ -181,8 +181,13 @@ export default function Profile() {
   const heightDisplay = goals.height_cm
     ? (heightUnit === "cm" ? `${goals.height_cm} cm` : `${ftIn.ft}′ ${ftIn.in}″`)
     : "—";
-  const weightDisplay = goals.weight_kg
+  const currentWeightDisplay = goals.weight_kg
     ? (weightUnit === "kg" ? `${goals.weight_kg} kg` : `${lbsVal} lbs`)
+    : "—";
+  const startingWeightDisplay = goals.starting_weight_kg
+    ? (weightUnit === "kg"
+        ? `${goals.starting_weight_kg} kg`
+        : `${Math.round(Number(goals.starting_weight_kg) * 2.20462 * 10) / 10} lbs`)
     : "—";
 
   return (
@@ -280,7 +285,11 @@ export default function Profile() {
               </FieldRow>
 
               <FieldRow label="Starting weight">
-                <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{weightDisplay}</span>
+                <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{startingWeightDisplay}</span>
+              </FieldRow>
+
+              <FieldRow label="Current weight">
+                <span style={{ fontSize: 14, color: "#333", fontWeight: 600 }}>{currentWeightDisplay}</span>
               </FieldRow>
             </div>
           </Section>
