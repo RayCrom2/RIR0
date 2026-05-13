@@ -237,25 +237,39 @@ export default function NutritionCalendar({ userId, onClose }) {
                 {/* Entry list */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {selectedEntries.map(e => {
+                    const hasDetails = MACROS.filter(m => m.key !== "calories").some(m => e[m.key] > 0);
                     const isExpanded = expandedEntryId === e.id;
+                    const rowContent = (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          {hasDetails && (
+                            <span style={{ fontSize: 11, color: "#bbb", transform: isExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", flexShrink: 0 }}>▶</span>
+                          )}
+                          <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.food_name}</span>
+                          {e.serving_amount && (
+                            <span style={{ color: "#aaa", fontSize: 11, flexShrink: 0 }}>
+                              {e.serving_amount}{e.serving_unit || ""}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ color: "#ff8c42", fontWeight: 700, fontSize: 12, flexShrink: 0, marginLeft: 8 }}>{e.calories} kcal</span>
+                      </>
+                    );
                     return (
                       <div key={e.id} style={{ background: "#fafafa", borderRadius: 8, overflow: "hidden", border: "1px solid #f0f0f0" }}>
-                        <button
-                          onClick={() => setExpandedEntryId(isExpanded ? null : e.id)}
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, textAlign: "left" }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <span style={{ fontSize: 11, color: "#bbb", transform: isExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s" }}>▶</span>
-                            <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.food_name}</span>
-                            {e.serving_amount && (
-                              <span style={{ color: "#aaa", fontSize: 11, flexShrink: 0 }}>
-                                {e.serving_amount}{e.serving_unit || ""}
-                              </span>
-                            )}
+                        {hasDetails ? (
+                          <button
+                            onClick={() => setExpandedEntryId(isExpanded ? null : e.id)}
+                            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, textAlign: "left" }}
+                          >
+                            {rowContent}
+                          </button>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", fontSize: 13 }}>
+                            {rowContent}
                           </div>
-                          <span style={{ color: "#ff8c42", fontWeight: 700, fontSize: 12, flexShrink: 0, marginLeft: 8 }}>{e.calories} kcal</span>
-                        </button>
-                        {isExpanded && (
+                        )}
+                        {hasDetails && isExpanded && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 10px 10px" }}>
                             {MACROS.filter(m => m.key !== "calories").map(m => (
                               e[m.key] > 0 && (
