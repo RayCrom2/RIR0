@@ -81,8 +81,14 @@ async function upsertDailyStatus(date, dayEntries, currentGoals, userId) {
     return acc;
   }, {});
   const met = checkGoalsMet(totals, currentGoals);
+  const snapshot = MACROS.reduce((acc, m) => {
+    acc[m.key]       = currentGoals[m.key]    ?? null;
+    acc[m.minKey]    = currentGoals[m.minKey] ?? null;
+    acc[m.dirKey]    = currentGoals[m.dirKey] ?? m.defaultDir;
+    return acc;
+  }, {});
   await supabase.from("daily_goal_status").upsert(
-    { user_id: userId, date, met },
+    { user_id: userId, date, met, goals_snapshot: snapshot },
     { onConflict: "user_id,date" }
   );
 }
