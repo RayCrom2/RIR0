@@ -477,7 +477,8 @@ export default function ExerciseLogger() {
   function cHandleSearchKey(e) {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (cSearchResults.length > 0) cAddExercise(cSearchResults[0]);
+    const exactMatch = cSearchResults.find((ex) => ex === cSearch);
+    if (exactMatch) cAddExercise(exactMatch);
     else if (cSearch.trim()) cAddExercise(cSearch);
   }
   function cAddSet(exIdx) {
@@ -584,7 +585,8 @@ export default function ExerciseLogger() {
   function sHandleSearchKey(e) {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    if (sSearchResults.length > 0) sAddExercise(sSearchResults[0]);
+    const exactMatch = sSearchResults.find((ex) => ex === sSearch);
+    if (exactMatch) sAddExercise(exactMatch);
     else if (sSearch.trim()) sAddExercise(sSearch);
   }
   function sAddSet(exIdx) {
@@ -786,7 +788,7 @@ export default function ExerciseLogger() {
   // ═══════════════════════════════════════════════
   if (view === "create")
     return (
-      <div className="max-w-[860px] mx-auto px-2">
+      <div className={`max-w-[860px] mx-auto px-2${cDropdownOpen ? " pb-80" : ""}`}>
         <div className="flex items-center gap-3.5 mb-1">
           <button
             onClick={() => setView("select")}
@@ -849,30 +851,30 @@ export default function ExerciseLogger() {
                 🔍
               </span>
               {cDropdownOpen && (cSearch.trim() || cCategoryFilter) && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
-                  {cSearchResults.length > 0 ? (
-                    cSearchResults.map((ex) => (
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100]">
+                  <div className="max-h-[220px] overflow-y-auto">
+                    {cSearchResults.length === 0 && !cSearch.trim() && (
+                      <p className="px-3.5 py-2.5 text-sm text-[#aaa] m-0">No exercises found</p>
+                    )}
+                    {cSearchResults.map((ex) => (
                       <button
                         key={ex}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          cAddExercise(ex);
-                        }}
+                        onMouseDown={(e) => { e.preventDefault(); cAddExercise(ex); }}
                         className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#333] block hover:bg-[#fff8f2]"
                       >
                         {ex}
                       </button>
-                    ))
-                  ) : (
-                    <button
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        cAddExercise(cSearch);
-                      }}
-                      className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] block"
-                    >
-                      + Add &ldquo;{cSearch}&rdquo; as custom exercise
-                    </button>
+                    ))}
+                  </div>
+                  {cSearch.trim() && (
+                    <div className="border-t border-[#f0f0f0]">
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); cAddExercise(cSearch); }}
+                        className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] font-semibold block hover:bg-[#fff8f2]"
+                      >
+                        + Add &ldquo;{cSearch}&rdquo;
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -915,7 +917,7 @@ export default function ExerciseLogger() {
   // SESSION VIEW
   // ═══════════════════════════════════════════════
   return (
-    <div className="max-w-[860px] mx-auto px-2">
+    <div className={`max-w-[860px] mx-auto px-2${sAddOpen ? " pb-80" : ""}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-3 min-w-0">
@@ -1040,20 +1042,26 @@ export default function ExerciseLogger() {
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-[#aaa]">🔍</span>
               {(sSearch.trim() || sCategoryFilter) && (
-                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100] max-h-[220px] overflow-y-auto">
-                  {sSearchResults.length > 0 ? (
-                    sSearchResults.map((ex) => (
+                <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-white border border-[#e8e8e8] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.1)] z-[100]">
+                  <div className="max-h-[220px] overflow-y-auto">
+                    {sSearchResults.length === 0 && !sSearch.trim() && (
+                      <p className="px-3.5 py-2.5 text-sm text-[#aaa] m-0">No exercises found</p>
+                    )}
+                    {sSearchResults.map((ex) => (
                       <button
                         key={ex}
                         onMouseDown={(e) => { e.preventDefault(); sAddExercise(ex); setSAddOpen(false); }}
                         className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#333] block hover:bg-[#fff8f2]"
                       >{ex}</button>
-                    ))
-                  ) : (
-                    <button
-                      onMouseDown={(e) => { e.preventDefault(); sAddExercise(sSearch); setSAddOpen(false); }}
-                      className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] block"
-                    >+ Add &ldquo;{sSearch}&rdquo; as custom exercise</button>
+                    ))}
+                  </div>
+                  {sSearch.trim() && (
+                    <div className="border-t border-[#f0f0f0]">
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); sAddExercise(sSearch); setSAddOpen(false); }}
+                        className="w-full text-left bg-transparent border-0 px-3.5 py-2.5 cursor-pointer text-sm text-[#ff8c42] font-semibold block hover:bg-[#fff8f2]"
+                      >+ Add &ldquo;{sSearch}&rdquo;</button>
+                    </div>
                   )}
                 </div>
               )}
