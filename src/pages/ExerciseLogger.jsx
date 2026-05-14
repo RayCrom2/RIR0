@@ -308,9 +308,10 @@ export default function ExerciseLogger() {
       if (!raw) return;
       try {
         const { sessionName: sn, sessionSource: ss, sessionExs: se } = JSON.parse(raw);
+        if (!se?.length) { localStorage.removeItem(STORAGE_KEY); return; }
         setSessionName(sn ?? '');
         setSessionSource(ss ?? 'free');
-        setSessionExs(se ?? []);
+        setSessionExs(se);
         setInWorkout(true);
         setView('session');
       } catch {}
@@ -323,13 +324,14 @@ export default function ExerciseLogger() {
         .eq('user_id', user.id)
         .maybeSingle()
         .then(({ data }) => {
-          if (data) {
+          if (data?.exercises?.length > 0) {
             setSessionName(data.session_name ?? '');
             setSessionSource(data.session_source ?? 'free');
-            setSessionExs(data.exercises ?? []);
+            setSessionExs(data.exercises);
             setInWorkout(true);
             setView('session');
           } else {
+            if (data) supabase.from('active_workouts').delete().eq('user_id', user.id);
             restoreFromLocal();
           }
         });
