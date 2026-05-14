@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { LuCalendar } from "react-icons/lu";
-import { MdEdit, MdKeyboardArrowUp, MdKeyboardArrowDown } from "react-icons/md";
+import { MdEdit, MdKeyboardArrowUp, MdKeyboardArrowDown, MdDeleteOutline } from "react-icons/md";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import UsdaNutrientCard from "../components/UsdaNutrientCard";
@@ -168,6 +168,7 @@ export default function Nutrition() {
   const toastTimer = useRef(null);
   const menuRef = useRef(null);
   const usdaRef = useRef(null);
+  const libraryRef = useRef(null);
   const pinnedSheetRef = useRef(null);
   const pinnedDragStart = useRef(null);
 
@@ -1380,7 +1381,7 @@ export default function Nutrition() {
         )}
 
         {myFoodsOpen && (
-          <div style={{ borderTop: "1px solid #f0f0f0", marginTop: 14, paddingTop: 14 }}>
+          <div ref={libraryRef} style={{ background: "#f0f4ff", borderRadius: 10, marginTop: 14, padding: "14px 16px 0" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
                 My Food Library
@@ -1403,21 +1404,21 @@ export default function Nutrition() {
               entry.
             </p>
           ) : (
-            <div style={{ padding: "0 16px 16px", flex: 1, overflowY: "auto" }}>
+            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto" }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0 }}>
                 <input
                   type="text"
                   value={myFoodsSearch}
                   onChange={(e) => setMyFoodsSearch(e.target.value)}
                   placeholder="Search saved foods…"
-                  style={{ flex: 1, minWidth: 0, padding: "6px 10px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, outline: "none", background: "#fafafa" }}
+                  style={{ flex: 1, minWidth: 0, padding: "6px 10px", fontSize: 16, border: "1px solid #c8d8ff", borderRadius: 7, outline: "none", background: "#fff" }}
                 />
                 <select
                   value={myFoodsSort}
                   onChange={(e) => setMyFoodsSort(e.target.value)}
                   disabled={!!myFoodsSearch.trim()}
                   title={myFoodsSearch.trim() ? "Sort disabled while searching" : undefined}
-                  style={{ maxWidth: 130, padding: "6px 8px", fontSize: 16, border: "1px solid #e0e0e0", borderRadius: 7, background: "#fafafa", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
+                  style={{ maxWidth: 130, padding: "6px 8px", fontSize: 16, border: "1px solid #c8d8ff", borderRadius: 7, background: "#fff", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
                 >
                   <option value="name_asc">Name A→Z</option>
                   <option value="name_desc">Name Z→A</option>
@@ -1481,8 +1482,8 @@ export default function Nutrition() {
                     padding: "9px 10px",
                     borderRadius: 8,
                     marginBottom: 6,
-                    background: hoveredLibraryId === food.id ? "#fff0e6" : "#fafafa",
-                    border: `1px solid ${hoveredLibraryId === food.id ? "#ff8c42" : "#f0f0f0"}`,
+                    background: hoveredLibraryId === food.id ? "#dce8ff" : "#fff",
+                    border: `1px solid ${hoveredLibraryId === food.id ? "#4f8ef7" : "#d0dcff"}`,
                     cursor: "pointer",
                     transition: "background 0.15s, border-color 0.15s",
                   }}
@@ -1610,13 +1611,14 @@ export default function Nutrition() {
                         border: "none",
                         cursor: "pointer",
                         color: "#ccc",
-                        fontSize: 16,
                         lineHeight: 1,
                         padding: "4px 6px",
+                        display: "flex",
+                        alignItems: "center",
                       }}
                       title="Remove from My Food Library"
                     >
-                      ✕
+                      <MdDeleteOutline size={18} />
                     </button>
                   </div>
                 </div>
@@ -1653,7 +1655,12 @@ export default function Nutrition() {
             onEdit={pinnedLibraryFood ? openEditFromPinned : undefined}
           />
         ) : !isMobile && hoveredFood ? (
-          <UsdaNutrientCard food={hoveredFood} />
+          <UsdaNutrientCard
+            food={hoveredFood}
+            style={hoveredLibraryId != null && libraryRef.current && containerRef.current
+              ? { top: libraryRef.current.getBoundingClientRect().top - containerRef.current.getBoundingClientRect().top }
+              : undefined}
+          />
         ) : null}
       </div>
 
