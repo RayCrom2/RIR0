@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { MdRestaurant, MdFitnessCenter, MdAccessibility, MdPerson } from 'react-icons/md'
 import DiagramPage from './pages/DiagramPage'
@@ -55,12 +55,48 @@ function NavAuth() {
   );
 }
 
+const STORAGE_KEY = 'rir0_active_workout';
+
+function ActiveWorkoutRedirect() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (window.location.pathname === '/exerciselogger') return;
+    if (user) {
+      supabase
+        .from('active_workouts')
+        .select('exercises')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.exercises?.length > 0) navigate('/exerciselogger', { replace: true });
+        });
+    } else {
+      try {
+        const { sessionExs } = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        if (sessionExs?.length > 0) navigate('/exerciselogger', { replace: true });
+      } catch {}
+    }
+  }, [user]);
+
+  return null;
+}
+
 function BottomNav() {
   const { user, setModalOpen } = useAuth();
   const avatarUrl = user?.user_metadata?.avatar_url;
   const initial = (user?.user_metadata?.full_name || user?.email || '?')[0]?.toUpperCase();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const check = () => setKeyboardOpen(vv.height < window.innerHeight * 0.75);
+    vv.addEventListener('resize', check);
+    return () => vv.removeEventListener('resize', check);
+  }, []);
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav" style={keyboardOpen ? { display: 'none' } : undefined}>
       <NavLink to="/nutrition" className={({ isActive }) => 'bottom-nav-item' + (isActive ? ' active' : '')}>
         <MdRestaurant size={24} />
         <span>Nutrition</span>
@@ -110,6 +146,7 @@ export default function App() {
         <img src="/pwa-icon.svg" alt="0" style={{ width: '3em', height: '3em', verticalAlign: 'middle', marginBottom: '0.15em' }} />
         </p> */}
 
+        <ActiveWorkoutRedirect />
         <Routes>
           <Route path="/" element={<Navigate to="/nutrition" replace />} />
           <Route path="/nutrition" element={<Nutrition />} />

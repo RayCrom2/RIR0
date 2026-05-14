@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import WorkoutHistoryCard from "../components/WorkoutHistoryCard.jsx";
 
 
+const STORAGE_KEY = 'rir0_active_workout';
+
 const WGER_CATEGORIES = [
   { label: 'Abs', id: 10 },
   { label: 'Arms', id: 8 },
@@ -107,7 +109,7 @@ function ExerciseCard({
           <select
             value={ex.unit}
             onChange={(e) => onUpdateUnit(e.target.value)}
-            className="py-1.5 px-2 text-[13px] cursor-pointer w-16 border border-[#e0e0e0] rounded-lg bg-[#fafafa] outline-none"
+            className="py-1.5 px-2 text-[16px] cursor-pointer w-16 border border-[#e0e0e0] rounded-lg bg-[#fafafa] outline-none"
           >
             <option value="lbs">lbs</option>
             <option value="kg">kg</option>
@@ -169,7 +171,7 @@ function ExerciseCard({
               placeholder="—"
               value={s.reps}
               onChange={(e) => !done && onUpdateSet(si, "reps", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <input
               type="number"
@@ -178,7 +180,7 @@ function ExerciseCard({
               placeholder="—"
               value={s.weight}
               onChange={(e) => !done && onUpdateSet(si, "weight", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <input
               type="number"
@@ -187,7 +189,7 @@ function ExerciseCard({
               placeholder="—"
               value={s.rir}
               onChange={(e) => !done && onUpdateSet(si, "rir", e.target.value)}
-              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
+              className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
             <button
               onClick={() => onRemoveSet(si)}
@@ -246,6 +248,9 @@ export default function ExerciseLogger() {
   const [saveAsRoutine, setSaveAsRoutine] = useState(false);
   const sSearchRef = useRef(null);
 
+  const [inWorkout, setInWorkout] = useState(false);
+  const dbSaveTimer = useRef(null);
+
   // Derived session stats — only count sets marked done
   const doneSets = sessionExs.flatMap((ex) => ex.sets.filter((s) => s.done));
   const totalSets = doneSets.length;
@@ -296,6 +301,86 @@ export default function ExerciseLogger() {
       .then(({ data }) => setPastWorkouts(data || []));
   }, [user]);
 
+  // ── restore active workout on mount / login
+  useEffect(() => {
+    function restoreFromLocal() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const { sessionName: sn, sessionSource: ss, sessionExs: se } = JSON.parse(raw);
+        if (!se?.length) { localStorage.removeItem(STORAGE_KEY); return; }
+        setSessionName(sn ?? '');
+        setSessionSource(ss ?? 'free');
+        setSessionExs(se);
+        setInWorkout(true);
+        setView('session');
+      } catch {}
+    }
+
+    if (user) {
+      supabase
+        .from('active_workouts')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.exercises?.length > 0) {
+            setSessionName(data.session_name ?? '');
+            setSessionSource(data.session_source ?? 'free');
+            setSessionExs(data.exercises);
+            setInWorkout(true);
+            setView('session');
+          } else {
+            if (data) supabase.from('active_workouts').delete().eq('user_id', user.id);
+            restoreFromLocal();
+          }
+        });
+    } else {
+      restoreFromLocal();
+    }
+  }, [user]);
+
+  // ── auto-save active workout on every change (localStorage immediately, DB debounced)
+  useEffect(() => {
+    if (!inWorkout) return;
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionName, sessionSource, sessionExs }));
+
+    if (user) {
+      clearTimeout(dbSaveTimer.current);
+      dbSaveTimer.current = setTimeout(() => {
+        if (navigator.onLine) {
+          supabase.from('active_workouts').upsert({
+            user_id: user.id,
+            session_name: sessionName,
+            session_source: sessionSource,
+            exercises: sessionExs,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }, 1000);
+    }
+
+    return () => clearTimeout(dbSaveTimer.current);
+  }, [sessionExs, sessionName, sessionSource, inWorkout, user]);
+
+  // ── flush to DB when coming back online
+  useEffect(() => {
+    if (!user) return;
+    const flush = () => {
+      if (!inWorkout) return;
+      supabase.from('active_workouts').upsert({
+        user_id: user.id,
+        session_name: sessionName,
+        session_source: sessionSource,
+        exercises: sessionExs,
+        updated_at: new Date().toISOString(),
+      });
+    };
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [inWorkout, user, sessionExs, sessionName, sessionSource]);
+
 
   // ── select actions
   function goCreateRoutine() {
@@ -311,9 +396,9 @@ export default function ExerciseLogger() {
     setSessionSource("free");
     setSessionExs([]);
     setSSearch("");
-
     setSAddOpen(false);
     setEnding(false);
+    setInWorkout(true);
     setView("session");
   }
   function goRoutineSession(r) {
@@ -340,9 +425,9 @@ export default function ExerciseLogger() {
     });
     setSessionExs(initialExs);
     setSSearch("");
-
     setSAddOpen(false);
     setEnding(false);
+    setInWorkout(true);
     setView("session");
   }
   async function deleteRoutine(id) {
@@ -550,6 +635,9 @@ export default function ExerciseLogger() {
     setView("select");
     setEnding(false);
     setSessionExs([]);
+    setInWorkout(false);
+    localStorage.removeItem(STORAGE_KEY);
+    if (user) supabase.from('active_workouts').delete().eq('user_id', user.id);
   }
   function handleFinish() {
     requireAuth(async () => {
@@ -717,7 +805,7 @@ export default function ExerciseLogger() {
               setCError("");
             }}
             placeholder="e.g. Push Day, Full Body, Upper/Lower…"
-            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border"
+            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0 w-full box-border"
           />
         </div>
 
@@ -748,7 +836,7 @@ export default function ExerciseLogger() {
                 onKeyDown={cHandleSearchKey}
                 onFocus={() => setCDropdownOpen(true)}
                 placeholder="Search exercises or type a custom name…"
-                className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
+                className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-[#aaa]">
                 🔍
@@ -872,7 +960,7 @@ export default function ExerciseLogger() {
             value={workoutLogName}
             onChange={(e) => setWorkoutLogName(e.target.value)}
             placeholder="Workout name…"
-            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] w-full mb-3"
+            className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] w-full mb-3"
           />
 
           {/* Save as routine toggle */}
@@ -940,7 +1028,7 @@ export default function ExerciseLogger() {
                 onChange={(e) => { setSSearch(e.target.value); }}
                 onKeyDown={sHandleSearchKey}
                 placeholder="Search exercises or type a custom name…"
-                className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-sm outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
+                className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0 w-full box-border pl-9"
                 autoFocus
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none text-[#aaa]">🔍</span>

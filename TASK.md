@@ -1,14 +1,13 @@
-# Task: Move Muscle Information to Backend API or Database and make some improvements
+# Task: Add to Profile and Opening Modal
 
 ## Status: Complete
 
 ## Steps
 
-- [x] 1. Source new Information for Each Muscle and their Sub Parts
-- [x] 2. Create Data Tables to store the information and have attributes that relate subparts to their primary parts
-- [x] 3. Source new information for each part and populate the table
-- [x] 4. Remove the "Clear" button and instead invoke the behaviour that deselects a part when it is active and then clicked again
+- [x] 1. Allow user to select multiple goals if they coincide with one another i.e. Gain weight with Gain muscle, not something like Gain weight and Lose fat or Lose weight
+- [x] 2. After height, weight, age, gender, and goals are set, ask for the user's activity level that is used for the TDEE calculator's estimate of a users daily metabolic rate
+- [x] 3. Suggest nutrition goals based on all of the above in step 2. Ask severity of caloric defecit with the ranges i.e. (Minor 100-200 calorie defecit - .4-.6% lbs of body weight loss per week)
 
 ## Notes
 
-- Allow the comparison of USDA Foods with other foods and foods in "My Food Library"
+- If the fitness goal is not already, create an upsert and a place in the supabase user schema for them

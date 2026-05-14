@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import {
+  ACTIVITY_LEVELS,
+  DEFICIT_SEVERITY,
+  SURPLUS_SEVERITY,
+  GOAL_GROUPS,
+  applyGoalToggle,
+  calcSuggested,
+  getAge,
+  BirthDateInput,
+} from "../components/OnboardingModal";
 
 function cmToFtIn(cm) {
   const totalIn = Number(cm) / 2.54;
@@ -21,18 +31,20 @@ const MACRO_FIELDS = [
   { key: "sugar",    minKey: "sugar_min",    dirKey: "sugar_dir",    label: "Sugar",    unit: "g",    color: "#c87dd4", defaultDir: "below" },
 ];
 
+const MACRO_VALUE_KEYS = new Set(MACRO_FIELDS.flatMap(f => [f.key, f.minKey]));
+
 const GOALS_OPTIONS = [
-  { value: "lose_weight",  label: "Lose weight"  },
-  { value: "lose_fat",     label: "Lose fat"      },
-  { value: "maintain",     label: "Maintain"      },
-  { value: "gain_muscle",  label: "Gain muscle"   },
-  { value: "gain_weight",  label: "Gain weight"   },
+  { value: "lose_weight", label: "Lose weight" },
+  { value: "lose_fat",    label: "Lose fat"     },
+  { value: "maintain",    label: "Maintain"     },
+  { value: "gain_muscle", label: "Gain muscle"  },
+  { value: "gain_weight", label: "Gain weight"  },
 ];
 
 const EXPERIENCE_OPTIONS = [
-  { value: "beginner",     label: "Beginner"      },
-  { value: "intermediate", label: "Intermediate"  },
-  { value: "advanced",     label: "Advanced"      },
+  { value: "beginner",     label: "Beginner"     },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "advanced",     label: "Advanced"     },
 ];
 
 const DEFAULT_GOALS = {
@@ -41,8 +53,11 @@ const DEFAULT_GOALS = {
   fat_min: null, fiber_min: null, sugar_min: null,
   calories_dir: "below", protein_dir: "above", carbs_dir: "below",
   fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
-  gender: "male", age: "", height_cm: "", weight_kg: "",
-  experience_level: "beginner", fitness_goal: "maintain",
+  gender: "male", age: "", birth_date: "", height_cm: "", weight_kg: "",
+  experience_level: "beginner",
+  fitness_goal: "maintain",
+  fitness_goals: ["maintain"],
+  activity_level: "moderate",
 };
 
 export default function Profile() {
@@ -56,6 +71,8 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deficitSeverity, setDeficitSeverity] = useState("moderate");
+  const [surplusSeverity, setSurplusSeverity] = useState("moderate");
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const displayName = user?.user_metadata?.full_name || user?.email || "";
@@ -70,14 +87,18 @@ export default function Profile() {
       .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          setGoals({ ...DEFAULT_GOALS, ...data });
+          const merged = { ...DEFAULT_GOALS, ...data };
+          // Backwards compat: derive fitness_goals from fitness_goal if not set
+          if (!data.fitness_goals?.length) {
+            merged.fitness_goals = data.fitness_goal ? [data.fitness_goal] : ["maintain"];
+          }
+          setGoals(merged);
           const enabled = {};
-          MACRO_FIELDS.forEach(f => {
-            if (data[f.minKey] != null) enabled[f.key] = true;
-          });
+          MACRO_FIELDS.forEach(f => { if (data[f.minKey] != null) enabled[f.key] = true; });
           setRangeEnabled(enabled);
           if (data.height_cm) { const c = cmToFtIn(data.height_cm); setFtIn({ ft: String(c.ft), in: String(c.in) }); }
           if (data.weight_kg) setLbsVal(String(kgToLbs(data.weight_kg)));
+          // birth_date from DB may come as "YYYY-MM-DD" string — keep as-is for the date input
         }
         setLoading(false);
       });
@@ -85,11 +106,13 @@ export default function Profile() {
 
   function setG(key, val) {
     setGoals(g => ({ ...g, [key]: val === "" ? null : (isNaN(Number(val)) ? val : Number(val)) }));
+    if (MACRO_VALUE_KEYS.has(key)) {
+      const fg = goals.fitness_goals ?? ["maintain"];
+      if (fg.some(g => ["lose_weight", "lose_fat"].includes(g))) setDeficitSeverity("custom");
+      else if (fg.some(g => ["gain_muscle", "gain_weight"].includes(g))) setSurplusSeverity("custom");
+    }
   }
-
-  function setGStr(key, val) {
-    setGoals(g => ({ ...g, [key]: val }));
-  }
+  function setGStr(key, val) { setGoals(g => ({ ...g, [key]: val })); }
 
   function toggleHeightUnit(unit) {
     if (unit === "ftin" && heightUnit === "cm") {
@@ -128,7 +151,12 @@ export default function Profile() {
     setSaving(true);
     await supabase
       .from("nutrition_goals")
-      .upsert({ user_id: user.id, ...goals }, { onConflict: "user_id" });
+      .upsert({
+        user_id: user.id,
+        ...goals,
+        age: computedAge || goals.age,
+        fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
+      }, { onConflict: "user_id" });
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -142,46 +170,45 @@ export default function Profile() {
     );
   }
 
+  const fitnessGoals = goals.fitness_goals ?? ["maintain"];
+  const isLoss = fitnessGoals.some(g => ["lose_weight", "lose_fat"].includes(g));
+  const isGain = fitnessGoals.some(g => ["gain_muscle", "gain_weight"].includes(g));
+
+  // Compute TDEE for display in suggestion card
+  const computedAge = getAge(goals.birth_date) ?? Number(goals.age);
+  const hasProfileData = goals.weight_kg && goals.height_cm && computedAge;
+  let tdeeDisplay = null;
+  if (hasProfileData) {
+    const w = Number(goals.weight_kg), h = Number(goals.height_cm), a = computedAge;
+    const bmr = goals.gender === "male"
+      ? 10 * w + 6.25 * h - 5 * a + 5
+      : 10 * w + 6.25 * h - 5 * a - 161;
+    const actMult = ACTIVITY_LEVELS.find(l => l.value === goals.activity_level)?.multiplier ?? 1.55;
+    tdeeDisplay = Math.round(bmr * actMult);
+  }
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
       <p className="font-bold text-[2rem] mb-1">Profile</p>
 
       {/* User card */}
-      <div style={{
-        background: "#fff", borderRadius: 12,
-        padding: "24px 20px", marginBottom: 24,
-        boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
-        display: "flex", alignItems: "center", gap: 16,
-      }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: "24px 20px", marginBottom: 24, boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 16 }}>
         {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt="avatar"
-            style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-          />
+          <img src={avatarUrl} alt="avatar" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
         ) : (
-          <div style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: "#ff8c42", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 22, fontWeight: 700, flexShrink: 0,
-          }}>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ff8c42", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>
             {initial}
           </div>
         )}
         <div style={{ minWidth: 0, flex: 1 }}>
           {displayName && displayName !== user.email && (
-            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>
-              {displayName}
-            </p>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>{displayName}</p>
           )}
-          <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {user.email}
-          </p>
+          <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</p>
         </div>
         <button
           onClick={() => supabase.auth.signOut()}
-          style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: '#555', flexShrink: 0 }}
+          style={{ background: "none", border: "1px solid #e0e0e0", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#555", flexShrink: 0 }}
         >
           Sign Out
         </button>
@@ -192,7 +219,7 @@ export default function Profile() {
       ) : (
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* About you */}
+          {/* ── About You ── */}
           <Section title="About You">
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <FieldRow label="Gender">
@@ -205,10 +232,21 @@ export default function Profile() {
                   ))}
                 </div>
               </FieldRow>
-              <FieldRow label="Age" unit="yrs">
-                <input type="number" min="10" max="100" value={goals.age ?? ""}
-                  onChange={e => setG("age", e.target.value)} style={numInput} />
-              </FieldRow>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Date of Birth</span>
+                  <BirthDateInput
+                    value={goals.birth_date ?? ""}
+                    onChange={v => setGStr("birth_date", v)}
+                    style={{ ...numInput, width: "auto", textAlign: "left" }}
+                  />
+                </div>
+                {goals.birth_date && (
+                  <p style={{ fontSize: 12, color: "#aaa", margin: 0, textAlign: "right" }}>
+                    Age: {getAge(goals.birth_date)} years
+                  </p>
+                )}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Height</span>
                 <div style={{ display: "flex", gap: 4 }}>
@@ -221,13 +259,13 @@ export default function Profile() {
                 </div>
                 {heightUnit === "cm" ? (
                   <input type="number" min="100" max="250" step="0.1" value={goals.height_cm ?? ""}
-                    onChange={e => setGStr("height_cm", Number(e.target.value))} style={numInput} />
+                    onChange={e => setGStr("height_cm", Number(e.target.value))} onFocus={e => e.target.select()} style={numInput} />
                 ) : (
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <input type="number" min="4" max="8" value={ftIn.ft}
-                      onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" style={{ ...numInput, width: 52 }} />
+                      onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                     <input type="number" min="0" max="11" value={ftIn.in}
-                      onChange={e => handleFtIn("in", e.target.value)} placeholder="in" style={{ ...numInput, width: 52 }} />
+                      onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                   </div>
                 )}
                 {heightUnit === "cm" && <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>cm</span>}
@@ -244,36 +282,40 @@ export default function Profile() {
                 </div>
                 {weightUnit === "kg" ? (
                   <input type="number" min="30" max="300" step="0.1" value={goals.weight_kg ?? ""}
-                    onChange={e => setGStr("weight_kg", Number(e.target.value))} style={numInput} />
+                    onChange={e => setGStr("weight_kg", Number(e.target.value))} onFocus={e => e.target.select()} style={numInput} />
                 ) : (
                   <input type="number" min="66" max="660" value={lbsVal}
-                    onChange={e => handleLbs(e.target.value)} style={numInput} />
+                    onChange={e => handleLbs(e.target.value)} onFocus={e => e.target.select()} style={numInput} />
                 )}
                 <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
               </div>
             </div>
           </Section>
 
-          {/* Fitness goal */}
-          <Section title="Fitness Goal">
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* ── Fitness Profile ── */}
+          <Section title="Fitness Profile">
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* Multi-select goals */}
               <div>
-                <span style={labelStyle}>Primary goal</span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-                  {GOALS_OPTIONS.map(g => (
-                    <button key={g.value} type="button" onClick={() => setGStr("fitness_goal", g.value)}
-                      style={{
-                        ...chipBtn, justifyContent: "flex-start", padding: "10px 14px",
-                        background: goals.fitness_goal === g.value ? "#fff5ee" : "#f7f7fb",
-                        color: goals.fitness_goal === g.value ? "#ff8c42" : "#555",
-                        border: goals.fitness_goal === g.value ? "1.5px solid #ff8c42" : "1.5px solid transparent",
-                        fontWeight: goals.fitness_goal === g.value ? 700 : 400,
-                      }}>
-                      {g.label}
-                    </button>
-                  ))}
+                <span style={labelStyle}>Goals</span>
+                <p style={{ margin: "2px 0 8px", fontSize: 12, color: "#aaa" }}>Select all that apply. Compatible goals can be combined.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {GOALS_OPTIONS.map(g => {
+                    const selected = fitnessGoals.includes(g.value);
+                    return (
+                      <button key={g.value} type="button"
+                        onClick={() => setGoals(prev => ({ ...prev, fitness_goals: applyGoalToggle(prev.fitness_goals ?? ["maintain"], g.value) }))}
+                        style={{ ...chipBtn, justifyContent: "flex-start", padding: "10px 14px", background: selected ? "#fff5ee" : "#f7f7fb", color: selected ? "#ff8c42" : "#555", border: selected ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: selected ? 700 : 400 }}>
+                        <span style={{ flex: 1 }}>{g.label}</span>
+                        {selected && <span style={{ fontSize: 13 }}>✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Experience level */}
               <div>
                 <span style={labelStyle}>Experience level</span>
                 <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
@@ -285,11 +327,81 @@ export default function Profile() {
                   ))}
                 </div>
               </div>
+
+              {/* Activity level */}
+              <div>
+                <span style={labelStyle}>Activity level</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 6 }}>
+                  {ACTIVITY_LEVELS.map(a => {
+                    const sel = goals.activity_level === a.value;
+                    return (
+                      <button key={a.value} type="button" onClick={() => setGStr("activity_level", a.value)}
+                        style={{ ...chipBtn, justifyContent: "flex-start", flexDirection: "column", alignItems: "flex-start", padding: "10px 14px", gap: 1, background: sel ? "#fff5ee" : "#f7f7fb", color: sel ? "#ff8c42" : "#555", border: sel ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{a.label}</span>
+                        <span style={{ fontSize: 12, color: sel ? "#ff8c42bb" : "#888" }}>{a.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
           </Section>
 
-          {/* Macro targets */}
+          {/* ── Daily Nutrition Goals ── */}
           <Section title="Daily Nutrition Goals" subtitle="Toggle '+ range' to set a min–max window instead of a single target.">
+
+            {/* Suggestion card — only shown when profile data is complete */}
+            {hasProfileData && (
+              <div style={{ background: "#fff8f2", border: "1px solid #ffcba4", borderRadius: 10, padding: "14px 16px", marginBottom: 18 }}>
+                <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700, color: "#ff8c42" }}>Suggested targets</p>
+                <p style={{ margin: "0 0 10px", fontSize: 12, color: "#888" }}>
+                  Estimated TDEE: <strong>{tdeeDisplay?.toLocaleString()} kcal/day</strong>
+                </p>
+
+                {(isLoss || isGain) && (
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "#555", margin: "0 0 6px" }}>
+                      {isLoss ? "Deficit intensity" : "Surplus intensity"}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {(isLoss ? DEFICIT_SEVERITY : SURPLUS_SEVERITY).map(s => {
+                        const active = (isLoss ? deficitSeverity : surplusSeverity) === s.value;
+                        return (
+                          <button key={s.value} type="button"
+                            onClick={() => isLoss ? setDeficitSeverity(s.value) : setSurplusSeverity(s.value)}
+                            style={{ ...chipBtn, justifyContent: "flex-start", padding: "8px 12px", gap: 8, background: active ? "#fff5ee" : "#f0ece8", color: active ? "#ff8c42" : "#555", border: active ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                            <span style={{ fontWeight: 700, minWidth: 82, fontSize: 13 }}>{s.label}</span>
+                            <span style={{ fontSize: 12, color: active ? "#ff8c42bb" : "#888" }}>{s.desc}</span>
+                          </button>
+                        );
+                      })}
+                      {(() => {
+                        const active = (isLoss ? deficitSeverity : surplusSeverity) === "custom";
+                        return (
+                          <button type="button"
+                            onClick={() => isLoss ? setDeficitSeverity("custom") : setSurplusSeverity("custom")}
+                            style={{ ...chipBtn, justifyContent: "flex-start", padding: "8px 12px", gap: 8, background: active ? "#fff5ee" : "#f0ece8", color: active ? "#ff8c42" : "#555", border: active ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                            <span style={{ fontWeight: 700, minWidth: 82, fontSize: 13 }}>Custom</span>
+                            <span style={{ fontSize: 12, color: active ? "#ff8c42bb" : "#888" }}>Manually set macro values</span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                <button type="button"
+                  onClick={() => {
+                    const calc = calcSuggested({ ...goals, age: computedAge, deficitSeverity, surplusSeverity });
+                    if (calc) setGoals(g => ({ ...g, ...calc }));
+                  }}
+                  style={{ width: "100%", padding: "9px 0", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Apply suggested targets
+                </button>
+              </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {MACRO_FIELDS.map(f => (
                 <div key={f.key}>
@@ -304,16 +416,16 @@ export default function Profile() {
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <input type="number" min="0" value={goals[f.minKey] ?? ""}
                           onChange={e => setG(f.minKey, e.target.value)}
-                          placeholder="min" style={{ ...numInput, width: 66 }} />
+                          placeholder="min" onFocus={e => e.target.select()} style={{ ...numInput, width: 66 }} />
                         <span style={{ fontSize: 12, color: "#aaa" }}>–</span>
                         <input type="number" min="0" value={goals[f.key] ?? ""}
                           onChange={e => setG(f.key, e.target.value)}
-                          placeholder="max" style={{ ...numInput, width: 66 }} />
+                          placeholder="max" onFocus={e => e.target.select()} style={{ ...numInput, width: 66 }} />
                       </div>
                     ) : (
                       <>
                         <div style={{ display: "flex", gap: 3 }}>
-                          {["above", "below"].map(d => {
+                          {["below", "above"].map(d => {
                             const active = (goals[f.dirKey] ?? f.defaultDir) === d;
                             return (
                               <button key={d} type="button" onClick={() => setGStr(f.dirKey, d)}
@@ -324,7 +436,7 @@ export default function Profile() {
                           })}
                         </div>
                         <input type="number" min="0" value={goals[f.key] ?? ""}
-                          onChange={e => setG(f.key, e.target.value)} style={{ ...numInput, width: 80 }} />
+                          onChange={e => setG(f.key, e.target.value)} onFocus={e => e.target.select()} style={{ ...numInput, width: 80 }} />
                       </>
                     )}
                     <span style={{ fontSize: 13, color: "#aaa", width: 28 }}>{f.unit}</span>
@@ -357,11 +469,7 @@ export default function Profile() {
 
 function Section({ title, subtitle, children }) {
   return (
-    <div style={{
-      background: "#fff", borderRadius: 12,
-      padding: "20px 20px",
-      boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
-    }}>
+    <div style={{ background: "#fff", borderRadius: 12, padding: "20px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)" }}>
       <h3 style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700 }}>{title}</h3>
       {subtitle && <p style={{ margin: "0 0 14px", fontSize: 12, color: "#888" }}>{subtitle}</p>}
       {!subtitle && <div style={{ marginBottom: 14 }} />}

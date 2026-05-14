@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,18 +12,149 @@ const MACRO_FIELDS = [
 ];
 
 const GOALS = [
-  { value: "lose_weight",  label: "Lose weight"  },
-  { value: "lose_fat",     label: "Lose fat"      },
-  { value: "maintain",     label: "Maintain"      },
-  { value: "gain_muscle",  label: "Gain muscle"   },
-  { value: "gain_weight",  label: "Gain weight"   },
+  { value: "lose_weight", label: "Lose weight" },
+  { value: "lose_fat",    label: "Lose fat"     },
+  { value: "maintain",    label: "Maintain"     },
+  { value: "gain_muscle", label: "Gain muscle"  },
+  { value: "gain_weight", label: "Gain weight"  },
 ];
 
 const EXPERIENCE = [
-  { value: "beginner",     label: "Beginner"      },
-  { value: "intermediate", label: "Intermediate"  },
-  { value: "advanced",     label: "Advanced"      },
+  { value: "beginner",     label: "Beginner"     },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "advanced",     label: "Advanced"     },
 ];
+
+export const GOAL_GROUPS = {
+  lose:     ["lose_weight", "lose_fat"],
+  maintain: ["maintain"],
+  gain:     ["gain_muscle", "gain_weight"],
+};
+
+export const ACTIVITY_LEVELS = [
+  { value: "sedentary",   label: "Sedentary",          desc: "Desk job, little or no exercise",      multiplier: 1.2   },
+  { value: "light",       label: "Lightly Active",      desc: "1–3 days exercise per week",           multiplier: 1.375 },
+  { value: "moderate",    label: "Moderately Active",   desc: "3–5 days exercise per week",           multiplier: 1.55  },
+  { value: "active",      label: "Very Active",         desc: "6–7 days exercise per week",           multiplier: 1.725 },
+  { value: "very_active", label: "Extremely Active",    desc: "Physical job or training twice daily", multiplier: 1.9   },
+];
+
+export const DEFICIT_SEVERITY = [
+  { value: "minor",      label: "Minor",      desc: "100–200 kcal deficit · ~0.4–0.6 lbs/week", delta: -150 },
+  { value: "moderate",   label: "Moderate",   desc: "300–400 kcal deficit · ~0.6–1.0 lbs/week", delta: -350 },
+  { value: "aggressive", label: "Aggressive", desc: "500–750 kcal deficit · ~1.0–1.5 lbs/week", delta: -600 },
+];
+
+export const SURPLUS_SEVERITY = [
+  { value: "minor",      label: "Minor",      desc: "+100–200 kcal · ~0.25 lbs/week gain", delta: 150 },
+  { value: "moderate",   label: "Moderate",   desc: "+200–350 kcal · ~0.5 lbs/week gain",  delta: 275 },
+  { value: "aggressive", label: "Aggressive", desc: "+350–500 kcal · ~1.0 lbs/week gain",  delta: 425 },
+];
+
+function getGoalGroup(val) {
+  for (const [group, vals] of Object.entries(GOAL_GROUPS)) {
+    if (vals.includes(val)) return group;
+  }
+  return null;
+}
+
+export function applyGoalToggle(current, val) {
+  const group = getGoalGroup(val);
+  if (current.includes(val)) return current.filter(g => g !== val);
+  if (group === "maintain") return [val];
+  // Keep only same-group goals, add new one
+  return [...current.filter(g => getGoalGroup(g) === group), val];
+}
+
+export function calcSuggested({ gender, age, birth_date, height_cm, weight_kg, fitness_goals, activity_level, deficitSeverity, surplusSeverity }) {
+  const a = birth_date ? getAge(birth_date) : Number(age);
+  if (!weight_kg || !height_cm || !a) return null;
+  const w = Number(weight_kg), h = Number(height_cm);
+  const bmr = gender === "male"
+    ? 10 * w + 6.25 * h - 5 * a + 5
+    : 10 * w + 6.25 * h - 5 * a - 161;
+  const actMult = ACTIVITY_LEVELS.find(l => l.value === activity_level)?.multiplier ?? 1.55;
+  const tdee = Math.round(bmr * actMult);
+  const goals = fitness_goals ?? [];
+  const isLoss = goals.some(g => ["lose_weight", "lose_fat"].includes(g));
+  const isGain = goals.some(g => ["gain_muscle", "gain_weight"].includes(g));
+  let delta = 0;
+  if (isLoss) delta = DEFICIT_SEVERITY.find(s => s.value === deficitSeverity)?.delta ?? -350;
+  else if (isGain) delta = SURPLUS_SEVERITY.find(s => s.value === surplusSeverity)?.delta ?? 275;
+  const calories = Math.round((tdee + delta) / 50) * 50;
+  const proteinPerKg = isLoss ? 2.2 : isGain ? 2.0 : 1.6;
+  const protein = Math.round(w * proteinPerKg);
+  const fat = Math.round(calories * 0.28 / 9);
+  const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));
+  const fiber = Math.round(calories / 1000 * 14);
+  return { calories, protein, carbs, fat, fiber, sugar: 50 };
+}
+
+const isMobileDevice = () =>
+  typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
+function toDisplayDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${m}/${d}/${y}` : iso;
+}
+
+function parseDisplayDate(raw) {
+  const v = raw.trim();
+  if (!v) return "";
+  // MM/DD/YYYY or MM-DD-YYYY
+  const mdy = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+  // YYYY-MM-DD or YYYY/MM/DD
+  const ymd = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+  return "";
+}
+
+export function BirthDateInput({ value, onChange, style }) {
+  const [mobile] = useState(isMobileDevice);
+  const [text, setText] = useState(() => toDisplayDate(value));
+
+  useEffect(() => { setText(toDisplayDate(value)); }, [value]);
+
+  if (mobile) {
+    return (
+      <input
+        type="date"
+        value={value ?? ""}
+        max={new Date().toISOString().split("T")[0]}
+        onChange={e => onChange(e.target.value)}
+        style={style}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={text}
+      placeholder="MM/DD/YYYY"
+      onChange={e => setText(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={() => {
+        const iso = parseDisplayDate(text);
+        if (iso) { onChange(iso); setText(toDisplayDate(iso)); }
+        else if (!text.trim()) onChange("");
+      }}
+      style={style}
+    />
+  );
+}
+
+export function getAge(birthDate) {
+  if (!birthDate) return null;
+  const birth = new Date(birthDate);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  return age > 0 ? age : null;
+}
 
 function cmToFtIn(cm) {
   const totalIn = Number(cm) / 2.54;
@@ -35,36 +166,59 @@ function ftInToCm(ft, inch) {
 function kgToLbs(kg) { return Math.round(Number(kg) * 2.20462); }
 function lbsToKg(lbs) { return Math.round(Number(lbs) / 2.20462 * 10) / 10; }
 
-function calculateMacros({ gender, age, height_cm, weight_kg, fitness_goal }) {
-  if (!weight_kg || !height_cm || !age) return null;
-  const bmr = gender === "male"
-    ? 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
-    : 10 * weight_kg + 6.25 * height_cm - 5 * age - 161;
-  const tdee = Math.round(bmr * 1.4);
-  const adjust = { lose_weight: -500, lose_fat: -250, maintain: 0, gain_muscle: 200, gain_weight: 500 };
-  const calories = Math.round((tdee + (adjust[fitness_goal] ?? 0)) / 50) * 50;
-  const proteinPerKg = { lose_weight: 1.8, lose_fat: 2.0, maintain: 1.6, gain_muscle: 2.2, gain_weight: 2.0 };
-  const protein = Math.round(weight_kg * (proteinPerKg[fitness_goal] ?? 1.6));
-  const fat = Math.round(calories * 0.28 / 9);
-  const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));
-  const fiber = Math.round(calories / 1000 * 14);
-  return { calories, protein, carbs, fat, fiber, sugar: 50 };
-}
-
 export default function OnboardingModal() {
   const { user, needsOnboarding, setNeedsOnboarding } = useAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const [profile, setProfile] = useState({
-    gender: "male", age: "", height_cm: "", weight_kg: "",
-    experience_level: "beginner", fitness_goal: "maintain",
+    gender: "male", birth_date: "", height_cm: "", weight_kg: "",
+    experience_level: "beginner",
+    fitness_goals: ["maintain"],
+    activity_level: "moderate",
   });
 
   const [heightUnit, setHeightUnit] = useState("cm");
   const [ftIn, setFtIn] = useState({ ft: "", in: "" });
   const [weightUnit, setWeightUnit] = useState("kg");
   const [lbsVal, setLbsVal] = useState("");
+
+  const [deficitSeverity, setDeficitSeverity] = useState("moderate");
+  const [surplusSeverity, setSurplusSeverity] = useState("moderate");
+
+  const [macros, setMacros] = useState({
+    calories: 2000, protein: 150, carbs: 250, fat: 65, fiber: 25, sugar: 50,
+    calories_min: null, protein_min: null, carbs_min: null,
+    fat_min: null, fiber_min: null, sugar_min: null,
+    calories_dir: "below", protein_dir: "above", carbs_dir: "below",
+    fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
+  });
+  const [rangeEnabled, setRangeEnabled] = useState({});
+
+  if (!needsOnboarding) return null;
+
+  const isLoss = profile.fitness_goals.some(g => ["lose_weight", "lose_fat"].includes(g));
+  const isGain = profile.fitness_goals.some(g => ["gain_muscle", "gain_weight"].includes(g));
+
+  function applySuggested(overrideDeficit, overrideSurplus) {
+    const calc = calcSuggested({
+      ...profile,
+      deficitSeverity: overrideDeficit ?? deficitSeverity,
+      surplusSeverity: overrideSurplus ?? surplusSeverity,
+    });
+    if (calc) setMacros(m => ({ ...m, ...calc }));
+  }
+
+  function setP(key, val) { setProfile(p => ({ ...p, [key]: val })); }
+  function setM(key, val) {
+    setMacros(m => ({ ...m, [key]: val === "" ? null : Number(val) }));
+    if (isLoss) setDeficitSeverity("custom");
+    else if (isGain) setSurplusSeverity("custom");
+  }
+  function toggleRange(key) {
+    setRangeEnabled(r => ({ ...r, [key]: !r[key] }));
+    if (rangeEnabled[key]) setMacros(m => ({ ...m, [`${key}_min`]: null }));
+  }
 
   function toggleHeightUnit(unit) {
     if (unit === "ftin" && heightUnit === "cm") {
@@ -92,41 +246,24 @@ export default function OnboardingModal() {
     setP("weight_kg", String(lbsToKg(val)));
   }
 
-  const suggested = calculateMacros(profile);
-  const [macros, setMacros] = useState({
-    calories: 2000, protein: 150, carbs: 250, fat: 65, fiber: 25, sugar: 50,
-    calories_min: null, protein_min: null, carbs_min: null,
-    fat_min: null, fiber_min: null, sugar_min: null,
-    calories_dir: "below", protein_dir: "above", carbs_dir: "below",
-    fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
-  });
-  const [rangeEnabled, setRangeEnabled] = useState({});
-
-  if (!needsOnboarding) return null;
-
-  function applysuggested() {
-    if (!suggested) return;
-    setMacros((m) => ({ ...m, ...suggested }));
-  }
-
-  function setP(key, val) { setProfile((p) => ({ ...p, [key]: val })); }
-  function setM(key, val) { setMacros((m) => ({ ...m, [key]: val === "" ? null : Number(val) })); }
-  function toggleRange(key) {
-    setRangeEnabled((r) => ({ ...r, [key]: !r[key] }));
-    if (rangeEnabled[key]) setMacros((m) => ({ ...m, [`${key}_min`]: null }));
-  }
-
   async function handleSave() {
     setSaving(true);
     await supabase.from("nutrition_goals").upsert(
-      { user_id: user.id, ...profile, ...macros },
+      {
+        user_id: user.id,
+        ...profile,
+        age: getAge(profile.birth_date),
+        fitness_goal: profile.fitness_goals[0] ?? "maintain",
+        ...macros,
+      },
       { onConflict: "user_id" }
     );
     setNeedsOnboarding(false);
     setSaving(false);
   }
 
-  const canNext1 = profile.age && profile.height_cm && profile.weight_kg;
+  const canNext1 = profile.birth_date && profile.height_cm && profile.weight_kg;
+  const suggested = calcSuggested({ ...profile, deficitSeverity, surplusSeverity });
 
   return (
     <div style={{
@@ -143,7 +280,7 @@ export default function OnboardingModal() {
       }}>
         {/* Step indicators */}
         <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-          {[1,2,3].map(s => (
+          {[1, 2, 3, 4].map(s => (
             <div key={s} style={{
               flex: 1, height: 4, borderRadius: 2,
               background: s <= step ? "#ff8c42" : "#f0f0f0",
@@ -152,7 +289,7 @@ export default function OnboardingModal() {
           ))}
         </div>
 
-        {/* Step 1: About you */}
+        {/* ── Step 1: About you ── */}
         {step === 1 && (
           <>
             <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>About you</h2>
@@ -163,7 +300,7 @@ export default function OnboardingModal() {
               <div>
                 <label style={labelStyle}>Gender</label>
                 <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                  {["male","female","other"].map(g => (
+                  {["male", "female", "other"].map(g => (
                     <button key={g} type="button" onClick={() => setP("gender", g)}
                       style={{ ...chipBtn, background: profile.gender === g ? "#ff8c42" : "#f7f7fb", color: profile.gender === g ? "#fff" : "#555" }}>
                       {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -171,10 +308,21 @@ export default function OnboardingModal() {
                   ))}
                 </div>
               </div>
-              <Row label="Age" unit="yrs">
-                <input type="number" min="10" max="100" value={profile.age}
-                  onChange={e => setP("age", e.target.value)} style={numInput} />
-              </Row>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Date of Birth</span>
+                  <BirthDateInput
+                    value={profile.birth_date}
+                    onChange={v => setP("birth_date", v)}
+                    style={{ ...numInput, width: "auto", textAlign: "left" }}
+                  />
+                </div>
+                {profile.birth_date && (
+                  <p style={{ fontSize: 12, color: "#aaa", margin: "4px 0 0", textAlign: "right" }}>
+                    Age: {getAge(profile.birth_date)} years
+                  </p>
+                )}
+              </div>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Height</span>
@@ -188,13 +336,13 @@ export default function OnboardingModal() {
                   </div>
                   {heightUnit === "cm" ? (
                     <input type="number" min="100" max="250" step="0.1" value={profile.height_cm}
-                      onChange={e => setP("height_cm", e.target.value)} style={numInput} />
+                      onChange={e => setP("height_cm", e.target.value)} onFocus={e => e.target.select()} style={numInput} />
                   ) : (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <input type="number" min="4" max="8" value={ftIn.ft}
-                        onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" style={{ ...numInput, width: 52 }} />
+                        onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                       <input type="number" min="0" max="11" value={ftIn.in}
-                        onChange={e => handleFtIn("in", e.target.value)} placeholder="in" style={{ ...numInput, width: 52 }} />
+                        onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                     </div>
                   )}
                   {heightUnit === "cm" && <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>cm</span>}
@@ -213,38 +361,44 @@ export default function OnboardingModal() {
                   </div>
                   {weightUnit === "kg" ? (
                     <input type="number" min="30" max="300" step="0.1" value={profile.weight_kg}
-                      onChange={e => setP("weight_kg", e.target.value)} style={numInput} />
+                      onChange={e => setP("weight_kg", e.target.value)} onFocus={e => e.target.select()} style={numInput} />
                   ) : (
                     <input type="number" min="66" max="660" value={lbsVal}
-                      onChange={e => handleLbs(e.target.value)} style={numInput} />
+                      onChange={e => handleLbs(e.target.value)} onFocus={e => e.target.select()} style={numInput} />
                   )}
                   <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
                 </div>
               </div>
             </div>
-            <button onClick={() => canNext1 && setStep(2)} style={{ ...primaryBtn, marginTop: 24, opacity: canNext1 ? 1 : 0.4 }}>
+            <button onClick={() => canNext1 && setStep(2)}
+              style={{ ...primaryBtn, marginTop: 24, opacity: canNext1 ? 1 : 0.4 }}>
               Next →
             </button>
           </>
         )}
 
-        {/* Step 2: Your goal */}
+        {/* ── Step 2: Goals ── */}
         {step === 2 && (
           <>
-            <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>Your goal</h2>
+            <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>Your goals</h2>
             <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>
-              Pick your primary focus and experience level.
+              Select all that apply. Compatible goals can be combined.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <label style={labelStyle}>Primary goal</label>
+                <label style={labelStyle}>Fitness goal</label>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
-                  {GOALS.map(g => (
-                    <button key={g.value} type="button" onClick={() => setP("fitness_goal", g.value)}
-                      style={{ ...chipBtn, justifyContent: "flex-start", padding: "10px 14px", background: profile.fitness_goal === g.value ? "#fff5ee" : "#f7f7fb", color: profile.fitness_goal === g.value ? "#ff8c42" : "#555", border: profile.fitness_goal === g.value ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: profile.fitness_goal === g.value ? 700 : 400 }}>
-                      {g.label}
-                    </button>
-                  ))}
+                  {GOALS.map(g => {
+                    const selected = profile.fitness_goals.includes(g.value);
+                    return (
+                      <button key={g.value} type="button"
+                        onClick={() => setP("fitness_goals", applyGoalToggle(profile.fitness_goals, g.value))}
+                        style={{ ...chipBtn, justifyContent: "flex-start", padding: "10px 14px", background: selected ? "#fff5ee" : "#f7f7fb", color: selected ? "#ff8c42" : "#555", border: selected ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: selected ? 700 : 400 }}>
+                        <span style={{ flex: 1 }}>{g.label}</span>
+                        {selected && <span style={{ fontSize: 13 }}>✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -261,23 +415,85 @@ export default function OnboardingModal() {
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
               <button onClick={() => setStep(1)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
-              <button onClick={() => { applysuggested(); setStep(3); }} style={{ ...primaryBtn, flex: 2 }}>Next →</button>
+              <button
+                onClick={() => profile.fitness_goals.length > 0 && setStep(3)}
+                style={{ ...primaryBtn, flex: 2, opacity: profile.fitness_goals.length > 0 ? 1 : 0.4 }}
+              >Next →</button>
             </div>
           </>
         )}
 
-        {/* Step 3: Macro targets */}
+        {/* ── Step 3: Activity level ── */}
         {step === 3 && (
+          <>
+            <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>Activity level</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>
+              How active are you on a typical week? This sets your calorie burn estimate.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {ACTIVITY_LEVELS.map(a => {
+                const sel = profile.activity_level === a.value;
+                return (
+                  <button key={a.value} type="button" onClick={() => setP("activity_level", a.value)}
+                    style={{ ...chipBtn, justifyContent: "flex-start", flexDirection: "column", alignItems: "flex-start", padding: "12px 14px", gap: 2, background: sel ? "#fff5ee" : "#f7f7fb", color: sel ? "#ff8c42" : "#555", border: sel ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{a.label}</span>
+                    <span style={{ fontSize: 12, color: sel ? "#ff8c42bb" : "#888" }}>{a.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+              <button onClick={() => setStep(2)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
+              <button onClick={() => { applySuggested(); setStep(4); }} style={{ ...primaryBtn, flex: 2 }}>Next →</button>
+            </div>
+          </>
+        )}
+
+        {/* ── Step 4: Macro targets ── */}
+        {step === 4 && (
           <>
             <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>Macro targets</h2>
             <p style={{ margin: "0 0 4px", fontSize: 13, color: "#888" }}>
               {suggested ? "We've calculated a starting point — adjust freely." : "Set your daily targets."}
             </p>
-            {suggested && (
-              <button onClick={applysuggested} style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", padding: "0 0 12px", fontWeight: 600 }}>
-                ↺ Reset to suggested
-              </button>
+
+            {(isLoss || isGain) && (
+              <div style={{ marginTop: 12, marginBottom: 16 }}>
+                <p style={{ ...labelStyle, margin: "0 0 6px" }}>
+                  {isLoss ? "Deficit intensity" : "Surplus intensity"}
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {(isLoss ? DEFICIT_SEVERITY : SURPLUS_SEVERITY).map(s => {
+                    const active = (isLoss ? deficitSeverity : surplusSeverity) === s.value;
+                    return (
+                      <button key={s.value} type="button"
+                        onClick={() => {
+                          const newDef = isLoss ? s.value : deficitSeverity;
+                          const newSur = isGain ? s.value : surplusSeverity;
+                          if (isLoss) setDeficitSeverity(s.value); else setSurplusSeverity(s.value);
+                          applySuggested(newDef, newSur);
+                        }}
+                        style={{ ...chipBtn, justifyContent: "flex-start", padding: "9px 12px", gap: 8, background: active ? "#fff5ee" : "#f7f7fb", color: active ? "#ff8c42" : "#555", border: active ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                        <span style={{ fontWeight: 700, minWidth: 82, fontSize: 13 }}>{s.label}</span>
+                        <span style={{ fontSize: 12, color: active ? "#ff8c42bb" : "#888" }}>{s.desc}</span>
+                      </button>
+                    );
+                  })}
+                  {(() => {
+                    const active = (isLoss ? deficitSeverity : surplusSeverity) === "custom";
+                    return (
+                      <button type="button"
+                        onClick={() => { if (isLoss) setDeficitSeverity("custom"); else setSurplusSeverity("custom"); }}
+                        style={{ ...chipBtn, justifyContent: "flex-start", padding: "9px 12px", gap: 8, background: active ? "#fff5ee" : "#f7f7fb", color: active ? "#ff8c42" : "#555", border: active ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: 400 }}>
+                        <span style={{ fontWeight: 700, minWidth: 82, fontSize: 13 }}>Custom</span>
+                        <span style={{ fontSize: 12, color: active ? "#ff8c42bb" : "#888" }}>Manually set below</span>
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
             )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
               {MACRO_FIELDS.map(f => (
                 <div key={f.key}>
@@ -292,16 +508,16 @@ export default function OnboardingModal() {
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <input type="number" min="0" value={macros[f.minKey] ?? ""}
                           onChange={e => setM(f.minKey, e.target.value)}
-                          placeholder="min" style={{ ...numInput, width: 62 }} />
+                          placeholder="min" onFocus={e => e.target.select()} style={{ ...numInput, width: 62 }} />
                         <span style={{ fontSize: 12, color: "#aaa" }}>–</span>
                         <input type="number" min="0" value={macros[f.key] ?? ""}
                           onChange={e => setM(f.key, e.target.value)}
-                          placeholder="max" style={{ ...numInput, width: 62 }} />
+                          placeholder="max" onFocus={e => e.target.select()} style={{ ...numInput, width: 62 }} />
                       </div>
                     ) : (
                       <>
                         <div style={{ display: "flex", gap: 3 }}>
-                          {["above", "below"].map(d => {
+                          {["below", "above"].map(d => {
                             const active = (macros[f.dirKey] ?? f.defaultDir) === d;
                             return (
                               <button key={d} type="button"
@@ -313,7 +529,7 @@ export default function OnboardingModal() {
                           })}
                         </div>
                         <input type="number" min="0" value={macros[f.key] ?? ""}
-                          onChange={e => setM(f.key, e.target.value)} style={{ ...numInput, width: 80 }} />
+                          onChange={e => setM(f.key, e.target.value)} onFocus={e => e.target.select()} style={{ ...numInput, width: 80 }} />
                       </>
                     )}
                     <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{f.unit}</span>
@@ -322,8 +538,9 @@ export default function OnboardingModal() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setStep(2)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
-              <button onClick={handleSave} disabled={saving} style={{ ...primaryBtn, flex: 2, opacity: saving ? 0.7 : 1 }}>
+              <button onClick={() => setStep(3)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
+              <button onClick={handleSave} disabled={saving}
+                style={{ ...primaryBtn, flex: 2, opacity: saving ? 0.7 : 1 }}>
                 {saving ? "Saving…" : "Get Started"}
               </button>
             </div>
@@ -349,4 +566,4 @@ const labelStyle = { fontSize: 13, fontWeight: 600, color: "#555" };
 const numInput = { padding: "7px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", textAlign: "right", background: "#fafafa", width: 80 };
 const primaryBtn = { background: "#ff8c42", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%" };
 const secondaryBtn = { background: "#f7f7fb", color: "#555", border: "none", borderRadius: 10, padding: "11px 0", fontWeight: 600, fontSize: 14, cursor: "pointer" };
-const chipBtn = { border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontWeight: 500 };
+const chipBtn = { border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontWeight: 500, display: "flex", alignItems: "center" };
