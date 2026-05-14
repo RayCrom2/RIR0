@@ -54,7 +54,8 @@ const DEFAULT_GOALS = {
   calories_dir: "below", protein_dir: "above", carbs_dir: "below",
   fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
   gender: "male", age: "", birth_date: "", height_cm: "", weight_kg: "",
-  starting_weight_kg: "", preferred_weight_unit: "kg", preferred_height_unit: "cm",
+  starting_weight_kg: "", target_weight_kg: "",
+  preferred_weight_unit: "kg", preferred_height_unit: "cm",
   experience_level: "beginner",
   fitness_goal: "maintain",
   fitness_goals: ["maintain"],
@@ -311,6 +312,23 @@ export default function Profile() {
                 )}
                 <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
               </div>
+              {(isLoss || isGain) && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Goal weight</span>
+                  {weightUnit === "kg" ? (
+                    <input type="number" min="30" max="300" step="0.1"
+                      value={goals.target_weight_kg ?? ""}
+                      onChange={e => setGStr("target_weight_kg", e.target.value === "" ? "" : Number(e.target.value))}
+                      onFocus={e => e.target.select()} style={numInput} />
+                  ) : (
+                    <input type="number" min="66" max="660"
+                      value={goals.target_weight_kg ? Math.round(Number(goals.target_weight_kg) * 2.20462) : ""}
+                      onChange={e => setGStr("target_weight_kg", e.target.value === "" ? "" : lbsToKg(e.target.value))}
+                      onFocus={e => e.target.select()} style={numInput} />
+                  )}
+                  <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
+                </div>
+              )}
             </div>
           </Section>
 
@@ -369,6 +387,20 @@ export default function Profile() {
 
             </div>
           </Section>
+
+          {/* ── Weight Progress ── */}
+          {weightLogs.length > 0 && (
+            <Section title="Weight Progress">
+              <WeightGraph
+                logs={weightLogs}
+                startKg={Number(goals.starting_weight_kg) || null}
+                targetKg={Number(goals.target_weight_kg) || null}
+                unit={weightUnit}
+                isLoss={isLoss}
+                isGain={isGain}
+              />
+            </Section>
+          )}
 
           {/* ── Daily Nutrition Goals ── */}
           <Section title="Daily Nutrition Goals" subtitle="Toggle '+ range' to set a min–max window instead of a single target.">
@@ -485,6 +517,147 @@ export default function Profile() {
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain }) {
+  const toDisp = kg => unit === "lbs"
+    ? Math.round(kg * 2.20462 * 10) / 10
+    : Math.round(kg * 10) / 10;
+  const unitLabel = unit === "lbs" ? "lbs" : "kg";
+
+  const allKg = logs.map(l => l.weight_kg);
+  if (startKg) allKg.push(startKg);
+  if (targetKg) allKg.push(targetKg);
+  const minKg = Math.min(...allKg);
+  const maxKg = Math.max(...allKg);
+  const kgRange = maxKg - minKg || 2;
+  const padY = kgRange * 0.18;
+  const yMin = minKg - padY;
+  const yMax = maxKg + padY;
+
+  const W = 400, H = 160;
+  const pL = 42, pR = 38, pT = 14, pB = 26;
+  const plotW = W - pL - pR;
+  const plotH = H - pT - pB;
+
+  const times = logs.map(l => new Date(l.date).getTime());
+  const tMin = Math.min(...times);
+  const tMax = Math.max(...times);
+  const tRange = tMax - tMin || 1;
+
+  const xOf = dateStr => pL + ((new Date(dateStr).getTime() - tMin) / tRange) * plotW;
+  const yOf = kg => pT + plotH - ((kg - yMin) / (yMax - yMin)) * plotH;
+
+  const pts = logs.map(l => `${xOf(l.date).toFixed(1)},${yOf(l.weight_kg).toFixed(1)}`).join(" ");
+
+  // Progress annotation
+  const latest = logs[logs.length - 1]?.weight_kg;
+  let progressMsg = null, progressColor = "#aaa";
+  if (startKg && latest != null) {
+    const moved = startKg - latest;
+    const onTrack = (isLoss && moved > 0) || (isGain && moved < 0);
+    progressColor = onTrack ? "#5cb85c" : isLoss || isGain ? "#e05c5c" : "#aaa";
+    if (isLoss) {
+      progressMsg = moved > 0.05
+        ? `▼ ${toDisp(moved)} ${unitLabel} lost`
+        : moved < -0.05 ? `▲ ${toDisp(Math.abs(moved))} ${unitLabel} gained` : "No change yet";
+    } else if (isGain) {
+      progressMsg = moved < -0.05
+        ? `▲ ${toDisp(Math.abs(moved))} ${unitLabel} gained`
+        : moved > 0.05 ? `▼ ${toDisp(moved)} ${unitLabel} lost` : "No change yet";
+    }
+    if (targetKg && progressMsg && progressMsg !== "No change yet") {
+      const rem = Math.abs(latest - targetKg);
+      if (rem > 0.05) progressMsg += ` · ${toDisp(rem)} ${unitLabel} to go`;
+      else progressMsg += " · Goal reached! 🎉";
+    }
+  }
+
+  // Y-axis tick values
+  const yTicks = [0, 0.33, 0.67, 1].map(t => yMin + t * (yMax - yMin));
+  const goalColor = isLoss ? "#5cb85c" : isGain ? "#4f8ef7" : "#888";
+
+  return (
+    <div>
+      {progressMsg && (
+        <p style={{ fontSize: 13, fontWeight: 600, color: progressColor, margin: "0 0 10px", textAlign: "center" }}>
+          {progressMsg}
+        </p>
+      )}
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+        {/* Grid + Y labels */}
+        {yTicks.map((kg, i) => {
+          const y = yOf(kg);
+          return (
+            <g key={i}>
+              <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#f0f0f0" strokeWidth="1" />
+              <text x={pL - 4} y={y + 3.5} textAnchor="end" fontSize="9" fill="#ccc">
+                {toDisp(kg)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Starting weight line */}
+        {startKg && (
+          <>
+            <line x1={pL} y1={yOf(startKg)} x2={W - pR} y2={yOf(startKg)}
+              stroke="#bbb" strokeWidth="1.2" strokeDasharray="5 3" />
+            <text x={W - pR + 4} y={yOf(startKg) + 3.5} fontSize="9" fill="#bbb">Start</text>
+          </>
+        )}
+
+        {/* Goal weight line */}
+        {targetKg && (
+          <>
+            <line x1={pL} y1={yOf(targetKg)} x2={W - pR} y2={yOf(targetKg)}
+              stroke={goalColor} strokeWidth="1.5" strokeDasharray="5 3" />
+            <text x={W - pR + 4} y={yOf(targetKg) + 3.5} fontSize="9" fill={goalColor} fontWeight="600">Goal</text>
+          </>
+        )}
+
+        {/* Weight trend line */}
+        {logs.length > 1 && (
+          <polyline points={pts} fill="none" stroke="#ff8c42" strokeWidth="2.5"
+            strokeLinejoin="round" strokeLinecap="round" />
+        )}
+
+        {/* Weight dots */}
+        {logs.map((l, i) => (
+          <circle key={i} cx={xOf(l.date)} cy={yOf(l.weight_kg)} r="3.5" fill="#ff8c42" stroke="#fff" strokeWidth="1.5" />
+        ))}
+
+        {/* X axis labels */}
+        <text x={pL} y={H - 4} fontSize="9" fill="#ccc">
+          {new Date(logs[0].date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </text>
+        {logs.length > 1 && (
+          <text x={W - pR} y={H - 4} textAnchor="end" fontSize="9" fill="#ccc">
+            {new Date(logs[logs.length - 1].date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </text>
+        )}
+      </svg>
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
+        <LegendItem color="#ff8c42" label="Weight" solid />
+        {startKg && <LegendItem color="#bbb" label="Start" />}
+        {targetKg && <LegendItem color={goalColor} label="Goal" />}
+      </div>
+    </div>
+  );
+}
+
+function LegendItem({ color, label, solid }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#888" }}>
+      <svg width="20" height="2" style={{ overflow: "visible" }}>
+        <line x1="0" y1="1" x2="20" y2="1" stroke={color} strokeWidth={solid ? 2.5 : 1.5}
+          strokeDasharray={solid ? undefined : "4 2"} />
+      </svg>
+      {label}
     </div>
   );
 }
