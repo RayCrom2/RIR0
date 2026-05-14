@@ -248,16 +248,28 @@ export default function OnboardingModal() {
 
   async function handleSave() {
     setSaving(true);
+    const weightKg = Number(profile.weight_kg) || null;
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     await supabase.from("nutrition_goals").upsert(
       {
         user_id: user.id,
         ...profile,
         age: getAge(profile.birth_date),
         fitness_goal: profile.fitness_goals[0] ?? "maintain",
+        preferred_weight_unit: weightUnit,
+        preferred_height_unit: heightUnit,
+        starting_weight_kg: weightKg,
         ...macros,
       },
       { onConflict: "user_id" }
     );
+    if (weightKg) {
+      await supabase.from("weight_logs").upsert(
+        { user_id: user.id, date: todayStr, weight_kg: weightKg },
+        { onConflict: "user_id,date" }
+      );
+    }
     setNeedsOnboarding(false);
     setSaving(false);
   }

@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 const MACROS = [
-  { key: "calories", label: "Calories", unit: "kcal", color: "#ff8c42" },
-  { key: "protein",  label: "Protein",  unit: "g",    color: "#4f8ef7" },
-  { key: "carbs",    label: "Carbs",    unit: "g",    color: "#f7c948" },
-  { key: "fat",      label: "Fat",      unit: "g",    color: "#e05c5c" },
-  { key: "fiber",    label: "Fiber",    unit: "g",    color: "#5cb85c" },
-  { key: "sugar",    label: "Sugar",    unit: "g",    color: "#c87dd4" },
+  { key: "calories", minKey: "calories_min", dirKey: "calories_dir", label: "Calories", unit: "kcal", color: "#ff8c42", defaultDir: "below" },
+  { key: "protein",  minKey: "protein_min",  dirKey: "protein_dir",  label: "Protein",  unit: "g",    color: "#4f8ef7", defaultDir: "above" },
+  { key: "carbs",    minKey: "carbs_min",    dirKey: "carbs_dir",    label: "Carbs",    unit: "g",    color: "#f7c948", defaultDir: "below" },
+  { key: "fat",      minKey: "fat_min",      dirKey: "fat_dir",      label: "Fat",      unit: "g",    color: "#e05c5c", defaultDir: "below" },
+  { key: "fiber",    minKey: "fiber_min",    dirKey: "fiber_dir",    label: "Fiber",    unit: "g",    color: "#5cb85c", defaultDir: "above" },
+  { key: "sugar",    minKey: "sugar_min",    dirKey: "sugar_dir",    label: "Sugar",    unit: "g",    color: "#c87dd4", defaultDir: "below" },
 ];
 
 function pad(n) { return String(n).padStart(2, "0"); }
@@ -33,6 +33,7 @@ export default function NutritionCalendar({ userId, onClose }) {
   const [month, setMonth] = useState(now.getMonth()); // 0-indexed
   const [logsByDate, setLogsByDate] = useState({});
   const [statusByDate, setStatusByDate] = useState({});
+  const [goalsByDate, setGoalsByDate] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
   const [expandedEntryId, setExpandedEntryId] = useState(null);
@@ -45,7 +46,7 @@ export default function NutritionCalendar({ userId, onClose }) {
     const end = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-01`;
     Promise.all([
       supabase.from("nutrition_logs").select("*").eq("user_id", userId).gte("logged_at", start).lt("logged_at", end),
-      supabase.from("daily_goal_status").select("date, met").eq("user_id", userId).gte("date", start).lt("date", end),
+      supabase.from("daily_goal_status").select("date, met, goals_snapshot").eq("user_id", userId).gte("date", start).lt("date", end),
     ]).then(([{ data: logs }, { data: statuses }]) => {
       const grouped = {};
       for (const entry of logs || []) {
@@ -54,9 +55,13 @@ export default function NutritionCalendar({ userId, onClose }) {
         grouped[d].push(entry);
       }
       setLogsByDate(grouped);
-      const statusMap = {};
-      for (const s of statuses || []) statusMap[s.date] = s.met;
+      const statusMap = {}, goalsMap = {};
+      for (const s of statuses || []) {
+        statusMap[s.date] = s.met;
+        if (s.goals_snapshot) goalsMap[s.date] = s.goals_snapshot;
+      }
       setStatusByDate(statusMap);
+      setGoalsByDate(goalsMap);
       setLoading(false);
     });
   }, [userId, year, month]);
@@ -85,6 +90,7 @@ export default function NutritionCalendar({ userId, onClose }) {
   const isFutureMonth = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth());
   const selectedKey = selectedDay ? ymd(year, month, selectedDay) : null;
   const selectedEntries = selectedKey ? (logsByDate[selectedKey] || []) : [];
+  const selectedGoals = selectedKey ? (goalsByDate[selectedKey] ?? null) : null;
   const selectedTotals = MACROS.reduce((acc, m) => {
     acc[m.key] = Math.round(selectedEntries.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) / 10;
     return acc;
@@ -183,38 +189,87 @@ export default function NutritionCalendar({ userId, onClose }) {
               <p style={{ color: "#bbb", fontSize: 13, textAlign: "center", margin: "12px 0" }}>No entries logged</p>
             ) : (
               <>
-                {/* Totals */}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                  {MACROS.map(m => (
-                    <div key={m.key} style={{ background: "#f7f7fb", borderRadius: 8, padding: "5px 10px", fontSize: 12 }}>
-                      <span style={{ color: "#888" }}>{m.label} </span>
-                      <span style={{ fontWeight: 700, color: m.color }}>{selectedTotals[m.key]}{m.unit === "kcal" ? " kcal" : m.unit}</span>
-                    </div>
-                  ))}
+                {/* Totals vs goals */}
+                <div style={{ background: "#f7f7fb", borderRadius: 10, padding: "12px 14px", marginBottom: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {MACROS.map(m => {
+                    const consumed = selectedTotals[m.key];
+                    const goal = selectedGoals?.[m.key] ?? null;
+                    const minVal = selectedGoals?.[m.minKey] ?? null;
+                    const dir = selectedGoals?.[m.dirKey] ?? m.defaultDir;
+                    const pct = goal ? Math.min(100, (consumed / goal) * 100) : 0;
+                    const minPct = (goal && minVal) ? Math.min(100, (minVal / goal) * 100) : null;
+                    let statusColor;
+                    if (!goal) {
+                      statusColor = m.color;
+                    } else if (minVal != null) {
+                      statusColor = consumed > goal ? "#e05c5c" : consumed < minVal ? "#f0a500" : "#5cb85c";
+                    } else {
+                      statusColor = (dir === "above" ? consumed >= goal : consumed <= goal) ? "#5cb85c" : "#e05c5c";
+                    }
+                    return (
+                      <div key={m.key}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, fontSize: 12 }}>
+                          <span style={{ fontWeight: 600, color: "#555", display: "flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+                            {m.label}
+                          </span>
+                          <span style={{ fontWeight: 700, color: statusColor }}>
+                            {m.key === "calories" ? consumed.toFixed(0) : consumed.toFixed(1)}
+                            {goal ? ` / ${minVal != null ? `${minVal}–${goal}` : goal} ${m.unit}` : ` ${m.unit}`}
+                          </span>
+                        </div>
+                        {goal && (
+                          <div style={{ height: 5, background: "#e8e8e8", borderRadius: 99, position: "relative" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: m.color, borderRadius: 99, transition: "width 0.3s" }} />
+                            {minPct != null && (
+                              <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.2)", borderRadius: 1 }} />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!selectedGoals && (
+                    <p style={{ margin: 0, fontSize: 11, color: "#bbb", textAlign: "center" }}>No goal snapshot — log food today to start tracking</p>
+                  )}
                 </div>
 
                 {/* Entry list */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {selectedEntries.map(e => {
+                    const hasDetails = MACROS.filter(m => m.key !== "calories").some(m => e[m.key] > 0);
                     const isExpanded = expandedEntryId === e.id;
+                    const rowContent = (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                          {hasDetails && (
+                            <span style={{ fontSize: 11, color: "#bbb", transform: isExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s", flexShrink: 0 }}>▶</span>
+                          )}
+                          <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.food_name}</span>
+                          {e.serving_amount && (
+                            <span style={{ color: "#aaa", fontSize: 11, flexShrink: 0 }}>
+                              {e.serving_amount}{e.serving_unit || ""}
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ color: "#ff8c42", fontWeight: 700, fontSize: 12, flexShrink: 0, marginLeft: 8 }}>{e.calories} kcal</span>
+                      </>
+                    );
                     return (
                       <div key={e.id} style={{ background: "#fafafa", borderRadius: 8, overflow: "hidden", border: "1px solid #f0f0f0" }}>
-                        <button
-                          onClick={() => setExpandedEntryId(isExpanded ? null : e.id)}
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, textAlign: "left" }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <span style={{ fontSize: 11, color: "#bbb", transform: isExpanded ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s" }}>▶</span>
-                            <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.food_name}</span>
-                            {e.serving_amount && (
-                              <span style={{ color: "#aaa", fontSize: 11, flexShrink: 0 }}>
-                                {e.serving_amount}{e.serving_unit || ""}
-                              </span>
-                            )}
+                        {hasDetails ? (
+                          <button
+                            onClick={() => setExpandedEntryId(isExpanded ? null : e.id)}
+                            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, textAlign: "left" }}
+                          >
+                            {rowContent}
+                          </button>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", fontSize: 13 }}>
+                            {rowContent}
                           </div>
-                          <span style={{ color: "#ff8c42", fontWeight: 700, fontSize: 12, flexShrink: 0, marginLeft: 8 }}>{e.calories} kcal</span>
-                        </button>
-                        {isExpanded && (
+                        )}
+                        {hasDetails && isExpanded && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 10px 10px" }}>
                             {MACROS.filter(m => m.key !== "calories").map(m => (
                               e[m.key] > 0 && (

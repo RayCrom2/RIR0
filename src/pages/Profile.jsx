@@ -54,6 +54,7 @@ const DEFAULT_GOALS = {
   calories_dir: "below", protein_dir: "above", carbs_dir: "below",
   fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
   gender: "male", age: "", birth_date: "", height_cm: "", weight_kg: "",
+  starting_weight_kg: "", preferred_weight_unit: "kg", preferred_height_unit: "cm",
   experience_level: "beginner",
   fitness_goal: "maintain",
   fitness_goals: ["maintain"],
@@ -73,6 +74,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
   const [surplusSeverity, setSurplusSeverity] = useState("moderate");
+  const [weightLogs, setWeightLogs] = useState([]);
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const displayName = user?.user_metadata?.full_name || user?.email || "";
@@ -96,12 +98,19 @@ export default function Profile() {
           const enabled = {};
           MACRO_FIELDS.forEach(f => { if (data[f.minKey] != null) enabled[f.key] = true; });
           setRangeEnabled(enabled);
+          setHeightUnit(data.preferred_height_unit || "cm");
+          setWeightUnit(data.preferred_weight_unit || "kg");
           if (data.height_cm) { const c = cmToFtIn(data.height_cm); setFtIn({ ft: String(c.ft), in: String(c.in) }); }
           if (data.weight_kg) setLbsVal(String(kgToLbs(data.weight_kg)));
-          // birth_date from DB may come as "YYYY-MM-DD" string — keep as-is for the date input
         }
         setLoading(false);
       });
+    supabase
+      .from("weight_logs")
+      .select("date, weight_kg")
+      .eq("user_id", user.id)
+      .order("date")
+      .then(({ data }) => { if (data) setWeightLogs(data); });
   }, [user]);
 
   function setG(key, val) {
@@ -121,6 +130,7 @@ export default function Profile() {
       const cm = ftInToCm(ftIn.ft, ftIn.in); if (cm) setGStr("height_cm", cm);
     }
     setHeightUnit(unit);
+    setGStr("preferred_height_unit", unit);
   }
   function handleFtIn(field, val) {
     const next = { ...ftIn, [field]: val };
@@ -134,6 +144,7 @@ export default function Profile() {
       const kg = lbsToKg(lbsVal); if (kg) setGStr("weight_kg", kg);
     }
     setWeightUnit(unit);
+    setGStr("preferred_weight_unit", unit);
   }
   function handleLbs(val) {
     setLbsVal(val);
@@ -149,6 +160,9 @@ export default function Profile() {
   async function handleSave(e) {
     e.preventDefault();
     setSaving(true);
+    const weightKg = Number(goals.weight_kg) || null;
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     await supabase
       .from("nutrition_goals")
       .upsert({
@@ -156,7 +170,15 @@ export default function Profile() {
         ...goals,
         age: computedAge || goals.age,
         fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
+        preferred_weight_unit: weightUnit,
+        preferred_height_unit: heightUnit,
       }, { onConflict: "user_id" });
+    if (weightKg) {
+      await supabase.from("weight_logs").upsert(
+        { user_id: user.id, date: todayStr, weight_kg: weightKg },
+        { onConflict: "user_id,date" }
+      );
+    }
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
