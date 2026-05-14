@@ -12,6 +12,25 @@ export const monthAbbr = new Date()
   .toUpperCase();
 
 const VISIBLE_KEY = "nutrition_visible_macros";
+const GUEST_LOG_KEY = "rir0_guest_logs";
+
+function loadGuestEntries() {
+  try {
+    const raw = localStorage.getItem(GUEST_LOG_KEY);
+    if (!raw) return [];
+    const { date, entries } = JSON.parse(raw);
+    if (date !== todayStr()) { localStorage.removeItem(GUEST_LOG_KEY); return []; }
+    return entries || [];
+  } catch { return []; }
+}
+
+function saveGuestEntries(entries) {
+  localStorage.setItem(GUEST_LOG_KEY, JSON.stringify({ date: todayStr(), entries }));
+}
+
+function clearGuestEntries() {
+  localStorage.removeItem(GUEST_LOG_KEY);
+}
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
 
@@ -230,20 +249,29 @@ export default function Nutrition() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      setEntries([]);
+      setEntries(loadGuestEntries());
+      setEntriesLoaded(true);
       return;
     }
-    supabase
-      .from("nutrition_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .gte("logged_at", todayStr())
-      .lt("logged_at", tomorrowStr())
-      .order("logged_time")
-      .then(({ data }) => {
-        setEntries(data || []);
-        setEntriesLoaded(true);
-      });
+    // Sync any guest entries to DB before loading
+    const guestEntries = loadGuestEntries();
+    clearGuestEntries();
+    const syncPromises = guestEntries.map(({ id: _id, ...rest }) =>
+      supabase.from("nutrition_logs").insert({ ...rest, user_id: user.id })
+    );
+    Promise.all(syncPromises).then(() => {
+      supabase
+        .from("nutrition_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("logged_at", todayStr())
+        .lt("logged_at", tomorrowStr())
+        .order("logged_time")
+        .then(({ data }) => {
+          setEntries(data || []);
+          setEntriesLoaded(true);
+        });
+    });
   }, [user, loading]);
 
   useEffect(() => {
@@ -291,8 +319,10 @@ export default function Nutrition() {
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
-        if (Array.isArray(data.nutrition_visible_macros))
+        if (Array.isArray(data.nutrition_visible_macros)) {
           setVisibleMacros(new Set(data.nutrition_visible_macros));
+          localStorage.setItem(VISIBLE_KEY, JSON.stringify(data.nutrition_visible_macros));
+        }
       });
   }, [user]);
 
@@ -355,6 +385,32 @@ export default function Nutrition() {
     };
     const rawUnit = (selectedUsdaFood.servingSizeUnit || "G").toUpperCase();
     const unit = USDA_UNIT_MAP[rawUnit] || "g";
+
+    if (!user) {
+      const now = new Date();
+      const entry = {
+        id: "guest_" + Date.now(),
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        food_name: selectedUsdaFood.description,
+        calories: Math.round(get(USDA_NUTRIENTS.calories)),
+        protein: get(USDA_NUTRIENTS.protein),
+        fat: get(USDA_NUTRIENTS.fat),
+        carbs: get(USDA_NUTRIENTS.carbs),
+        fiber: get(USDA_NUTRIENTS.fiber),
+        sugar: get(USDA_NUTRIENTS.sugar),
+        serving_amount: Number(servingInput) || null,
+        serving_unit: selectedUsdaFood.servingSize ? unit : "×",
+      };
+      const next = [...entries, entry];
+      setEntries(next);
+      saveGuestEntries(next);
+      showToast("Logged! Sign in to save permanently");
+      setSelectedUsdaFood(null);
+      setServingInput("");
+      return;
+    }
+
     requireAuth(async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
       const now = new Date();
@@ -396,6 +452,29 @@ export default function Nutrition() {
       Number(form.calories) < 0
     ) {
       setError("Enter a valid calorie amount.");
+      return;
+    }
+    if (!user) {
+      const now = new Date();
+      const entry = {
+        id: "guest_" + Date.now(),
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        food_name: form.name.trim(),
+        calories: Number(form.calories) || 0,
+        protein: Number(form.protein) || 0,
+        fat: Number(form.fat) || 0,
+        carbs: Number(form.carbs) || 0,
+        fiber: Number(form.fiber) || 0,
+        sugar: Number(form.sugar) || 0,
+        serving_amount: form.serving_amount !== "" ? Number(form.serving_amount) : null,
+        serving_unit: form.serving_unit || "g",
+      };
+      const next = [...entries, entry];
+      setEntries(next);
+      saveGuestEntries(next);
+      showToast("Logged! Sign in to save permanently");
+      setForm(EMPTY_FORM);
       return;
     }
     requireAuth(async () => {
@@ -479,6 +558,13 @@ export default function Nutrition() {
   }
 
   async function handleDelete(id) {
+    if (String(id).startsWith("guest_")) {
+      const next = entries.filter((e) => e.id !== id);
+      setEntries(next);
+      saveGuestEntries(next);
+      showToast("Food removed", "#ef4444");
+      return;
+    }
     await supabase.from("nutrition_logs").delete().eq("id", id);
     const next = entries.filter((e) => e.id !== id);
     setEntries(next);
@@ -488,7 +574,11 @@ export default function Nutrition() {
 
   async function handleClearAll() {
     if (!window.confirm("Clear all entries for today?")) return;
-    if (!user) return;
+    if (!user) {
+      clearGuestEntries();
+      setEntries([]);
+      return;
+    }
     await supabase
       .from("nutrition_logs")
       .delete()
@@ -671,6 +761,32 @@ export default function Nutrition() {
       <p style={{ color: "#888", marginBottom: 20, fontSize: 14 }}>
         {today} — entries reset each day
       </p>
+
+      {!user && (
+        <div style={{
+          background: "#fff8f0",
+          border: "1px solid #ffd8a8",
+          borderRadius: 8,
+          padding: "10px 16px",
+          marginBottom: 20,
+          fontSize: 13,
+          color: "#a05a00",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}>
+          <span style={{ flex: 1 }}>
+            You're browsing as a guest — food entries are saved locally for today only.
+          </span>
+          <button
+            onClick={() => requireAuth(() => {})}
+            style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}
+          >
+            Sign in to save
+          </button>
+        </div>
+      )}
 
       {/* Daily Progress Bars */}
       <div

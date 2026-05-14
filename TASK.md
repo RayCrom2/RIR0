@@ -1,14 +1,11 @@
-# Task: Fix Profile Page and Oboarding Modal
+# Task: Improve Experience of unsigned User
 
-## Status: Complete
+## Status: Completed
 
 ## Steps
 
-- [x] 1. Make the input box for the inches on "Feet and Inches" entry for height, double digit inputs get shaved off
-- [x] 2. Do not use a calendar date selection when asking for birthdate on mobile, give me options to replace it with
-- [x] 3. Be accepting of birthdate entries without implicit '/' marks on computer
-  <!-- -
-- [ ] 4.
-- [ ] 5.  -->
+- [x] 1. Allow users to look around when not signed in. They can go to any page and interact fully with the muscle diagram, if on a computer, but if they try to log a food, add something to their library, etc, prompt them to sign up/log in to save their data
 
 ## Notes
+
+- If there is a way to store information locally for guest user's implement that so that a user can use the app as a one-day functionality, but nothing is saved to the database until signed in
