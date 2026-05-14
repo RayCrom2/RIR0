@@ -1,14 +1,14 @@
-# Task: Add Goals to Nutrition Log History
+# Task: Fix Profile Page and Oboarding Modal
 
-## Status: Completed
+## Status: Complete
 
 ## Steps
 
-- [x] 1. In nutrition logs, record the goals that were in place 
-- [x] 2. When displaying nutrient history on the calendar, display the macros in a way that compares them to the goal of that day
-<!-- - [ ] 3. 
-- [ ] 4. 
+- [x] 1. Make the input box for the inches on "Feet and Inches" entry for height, double digit inputs get shaved off
+- [x] 2. Do not use a calendar date selection when asking for birthdate on mobile, give me options to replace it with
+- [x] 3. Be accepting of birthdate entries without implicit '/' marks on computer
+  <!-- -
+- [ ] 4.
 - [ ] 5.  -->
 
 ## Notes
-- Goals change and when we look at past logs, they should reflect the goals that were in place at the time

@@ -288,7 +288,7 @@ export default function Profile() {
                     <input type="number" min="4" max="8" value={ftIn.ft}
                       onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                     <input type="number" min="0" max="11" value={ftIn.in}
-                      onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
+                      onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 62 }} />
                   </div>
                 )}
                 {heightUnit === "cm" && <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>cm</span>}

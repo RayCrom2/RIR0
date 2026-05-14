@@ -102,13 +102,91 @@ function toDisplayDate(iso) {
 function parseDisplayDate(raw) {
   const v = raw.trim();
   if (!v) return "";
-  // MM/DD/YYYY or MM-DD-YYYY
+  // MM/DD/YYYY or MM-DD-YYYY (with separators)
   const mdy = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
   // YYYY-MM-DD or YYYY/MM/DD
   const ymd = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, "0")}-${ymd[3].padStart(2, "0")}`;
+  // MMDDYYYY (8 digits, no separators)
+  const d8 = v.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (d8) return `${d8[3]}-${d8[1]}-${d8[2]}`;
+  // MDDYYYY (7 digits, single-digit month)
+  const d7 = v.match(/^(\d{1})(\d{2})(\d{4})$/);
+  if (d7) return `${d7[3]}-${d7[1].padStart(2, "0")}-${d7[2]}`;
   return "";
+}
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+
+function daysInMonth(m, y) {
+  return new Date(y || 2000, m, 0).getDate();
+}
+
+function MobileSelectDOB({ value, onChange }) {
+  const [year, setYear] = useState(() => (value ? value.split("-")[0] : "") || "");
+  const [month, setMonth] = useState(() => {
+    const p = value?.split("-");
+    return p?.[1] ? String(Number(p[1])) : "";
+  });
+  const [day, setDay] = useState(() => {
+    const p = value?.split("-");
+    return p?.[2] ? String(Number(p[2])) : "";
+  });
+
+  useEffect(() => {
+    if (value) {
+      const [y, m, d] = value.split("-");
+      setYear(y || "");
+      setMonth(m ? String(Number(m)) : "");
+      setDay(d ? String(Number(d)) : "");
+    } else {
+      setYear(""); setMonth(""); setDay("");
+    }
+  }, [value]);
+
+  const maxDay = daysInMonth(Number(month), Number(year));
+  const effectiveDay = day && Number(day) > maxDay ? "" : day;
+  const currentYear = new Date().getFullYear();
+
+  function emit(y, m, d) {
+    if (y && m && d)
+      onChange(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+
+  const sel = {
+    flex: 1, minWidth: 0,
+    padding: "7px 4px", fontSize: 14,
+    border: "1px solid #e0e0e0", borderRadius: 8,
+    background: "#fafafa", outline: "none", cursor: "pointer",
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 4, flex: 1 }}>
+      <select value={month} style={{ ...sel, flex: 3 }}
+        onChange={e => { setMonth(e.target.value); emit(year, e.target.value, effectiveDay); }}>
+        <option value="">Month</option>
+        {MONTHS.map((name, i) => <option key={i + 1} value={String(i + 1)}>{name}</option>)}
+      </select>
+      <select value={effectiveDay} style={{ ...sel, flex: 1.5 }}
+        onChange={e => { setDay(e.target.value); emit(year, month, e.target.value); }}>
+        <option value="">Day</option>
+        {Array.from({ length: maxDay }, (_, i) => i + 1).map(d => (
+          <option key={d} value={String(d)}>{d}</option>
+        ))}
+      </select>
+      <select value={year} style={{ ...sel, flex: 2 }}
+        onChange={e => { setYear(e.target.value); emit(e.target.value, month, effectiveDay); }}>
+        <option value="">Year</option>
+        {Array.from({ length: 100 }, (_, i) => currentYear - i).map(y => (
+          <option key={y} value={String(y)}>{y}</option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 export function BirthDateInput({ value, onChange, style }) {
@@ -118,15 +196,7 @@ export function BirthDateInput({ value, onChange, style }) {
   useEffect(() => { setText(toDisplayDate(value)); }, [value]);
 
   if (mobile) {
-    return (
-      <input
-        type="date"
-        value={value ?? ""}
-        max={new Date().toISOString().split("T")[0]}
-        onChange={e => onChange(e.target.value)}
-        style={style}
-      />
-    );
+    return <MobileSelectDOB value={value ?? ""} onChange={onChange} />;
   }
 
   return (
@@ -354,7 +424,7 @@ export default function OnboardingModal() {
                       <input type="number" min="4" max="8" value={ftIn.ft}
                         onChange={e => handleFtIn("ft", e.target.value)} placeholder="ft" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
                       <input type="number" min="0" max="11" value={ftIn.in}
-                        onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 52 }} />
+                        onChange={e => handleFtIn("in", e.target.value)} placeholder="in" onFocus={e => e.target.select()} style={{ ...numInput, width: 62 }} />
                     </div>
                   )}
                   {heightUnit === "cm" && <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>cm</span>}
