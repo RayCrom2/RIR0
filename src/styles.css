@@ -33,6 +33,13 @@ body{font-family:Inter,Segoe UI,Arial,Helvetica,sans-serif;margin:20px;backgroun
   background: #ff8c42;
   color: #fff;
 }
+.weight-value-btn:hover {
+  background: #f2f2f2 !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
 input::placeholder {
   color: #c0c0c0;
 }
