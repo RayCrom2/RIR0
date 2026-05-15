@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { LuCalendar } from "react-icons/lu";
+import { LuCalendar, LuScanLine } from "react-icons/lu";
 import { MdEdit, MdKeyboardArrowUp, MdKeyboardArrowDown, MdDeleteOutline } from "react-icons/md";
+import BarcodeScanner from "../components/BarcodeScanner";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import UsdaNutrientCard from "../components/UsdaNutrientCard";
@@ -121,6 +122,12 @@ function dateStr(offset = 0) {
 function todayStr() {
   return dateStr(0);
 }
+
+function fmtServing(amount, unit) {
+  if (!amount) return unit === "×" || !unit ? "1 serving" : "—";
+  if (unit === "×") return `${amount} ${amount === 1 ? "serving" : "servings"}`;
+  return `${amount} ${unit || ""}`.trim();
+}
 function tomorrowStr() {
   return dateStr(1);
 }
@@ -161,6 +168,8 @@ export default function Nutrition() {
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
   const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [logEntryMenu, setLogEntryMenu] = useState(null);
   const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [weightToday, setWeightToday] = useState(null);
   const [weightInput, setWeightInput] = useState("");
@@ -348,6 +357,46 @@ export default function Nutrition() {
         setUsdaResults([]);
         setUsdaOpen(false);
       }
+    }
+  }
+
+  async function handleBarcodeScan(barcode) {
+    setScannerOpen(false);
+    showToast("Looking up product…", "#888");
+    try {
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const json = await res.json();
+      if (json.status !== 1 || !json.product) {
+        showToast("Product not found — try searching manually", "#e05c5c");
+        return;
+      }
+      const p = json.product;
+      const n = p.nutriments || {};
+      const qty = Number(p.serving_quantity) || 0;
+      const suffix = qty > 0 ? "_serving" : "_100g";
+      const servingUnit = (() => {
+        if (!p.serving_size) return "g";
+        const m = p.serving_size.match(/[\d.]+\s*([a-zA-Z]+)/);
+        return m ? m[1].toLowerCase() : "g";
+      })();
+      const food = {
+        description: p.product_name || p.abbreviated_product_name || "Unknown product",
+        brandOwner: p.brands || null,
+        servingSize: qty > 0 ? qty : 100,
+        servingSizeUnit: qty > 0 ? servingUnit : "g",
+        foodNutrients: [
+          { nutrientNumber: "208", value: n[`energy-kcal${suffix}`] ?? n["energy-kcal_100g"] ?? 0 },
+          { nutrientNumber: "203", value: n[`proteins${suffix}`] ?? n["proteins_100g"] ?? 0 },
+          { nutrientNumber: "204", value: n[`fat${suffix}`] ?? n["fat_100g"] ?? 0 },
+          { nutrientNumber: "205", value: n[`carbohydrates${suffix}`] ?? n["carbohydrates_100g"] ?? 0 },
+          { nutrientNumber: "291", value: n[`fiber${suffix}`] ?? n["fiber_100g"] ?? 0 },
+          { nutrientNumber: "269", value: n[`sugars${suffix}`] ?? n["sugars_100g"] ?? 0 },
+        ],
+      };
+      setSelectedUsdaFood(food);
+      setServingInput(String(food.servingSize));
+    } catch {
+      showToast("Failed to look up product", "#e05c5c");
     }
   }
 
@@ -1158,6 +1207,28 @@ export default function Nutrition() {
           >
             {formOpen ? "−" : "+"}
           </button>
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              style={{
+                background: "none",
+                border: "1px solid #e0e0e0",
+                borderRadius: 8,
+                width: 38,
+                height: 38,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                color: "#888",
+              }}
+              title="Scan barcode"
+            >
+              <LuScanLine size={20} />
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setMyFoodsOpen((o) => !o)}
@@ -1902,7 +1973,53 @@ export default function Nutrition() {
           >
             No foods logged yet — add your first entry above.
           </p>
-        ) : (
+        ) : isMobile ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sortedEntries.map((entry) => (
+                <div key={entry.id} onClick={() => setLogEntryMenu(entry)}
+                  style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, marginRight: 8 }}>{entry.food_name}</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {entry.serving_amount ? (
+                        <span style={{ fontSize: 12, color: "#aaa", whiteSpace: "nowrap" }}>
+                          {fmtServing(entry.serving_amount, entry.serving_unit)}
+                        </span>
+                      ) : null}
+                      <span style={{ fontSize: 11, color: "#bbb", whiteSpace: "nowrap" }}>{entry.logged_time || ""}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {visibleMacroList.map((m) => (
+                      <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
+                        <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
+                          {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
+                        </span>
+                        <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
+                          {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div style={{ background: "#fff8f3", border: "1px solid #ffe8d0", borderRadius: 10, padding: "12px 14px" }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "#555", margin: "0 0 8px" }}>Total</p>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {visibleMacroList.map((m) => (
+                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
+                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
+                        {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
+                      </span>
+                      <span style={{ fontSize: 13, color: m.color, fontWeight: 700 }}>
+                        {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
           <div style={{ overflowX: "auto" }}>
             <table
               style={{
@@ -1919,11 +2036,7 @@ export default function Nutrition() {
                     <th key={m.key} style={thStyle()}>
                       {m.label}
                       <br />
-                      <span
-                        style={{ fontWeight: 400, color: "#aaa", fontSize: 11 }}
-                      >
-                        {m.unit}
-                      </span>
+                      <span style={{ fontWeight: 400, color: "#aaa", fontSize: 11 }}>{m.unit}</span>
                     </th>
                   ))}
                   <th style={thStyle({ color: "#aaa" })}>Time</th>
@@ -1932,143 +2045,45 @@ export default function Nutrition() {
               </thead>
               <tbody>
                 {sortedEntries.map((entry, i) => (
-                  <tr
-                    key={entry.id}
-                    style={{
-                      borderTop: "1px solid #f0f0f0",
-                      background: i % 2 === 0 ? "#fff" : "#fafafa",
-                    }}
-                  >
-                    <td style={{ padding: "10px 16px", fontWeight: 500 }}>
-                      {entry.food_name}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "center",
-                        color: "#aaa",
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {entry.serving_amount
-                        ? `${entry.serving_amount} ${entry.serving_unit || ""}`
-                        : "—"}
+                  <tr key={entry.id} style={{ borderTop: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    <td style={{ padding: "10px 16px", fontWeight: 500 }}>{entry.food_name}</td>
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {fmtServing(entry.serving_amount, entry.serving_unit)}
                     </td>
                     {visibleMacroList.map((m) => (
-                      <td
-                        key={m.key}
-                        style={{
-                          padding: "10px 16px",
-                          textAlign: "center",
-                          color: m.color,
-                          fontWeight: m.key === "calories" ? 700 : 600,
-                        }}
-                      >
-                        {entry[m.key] > 0 ? (
-                          m.key === "calories" ? (
-                            entry[m.key]
-                          ) : (
-                            entry[m.key].toFixed(1)
-                          )
-                        ) : (
-                          <span style={{ color: "#ddd" }}>—</span>
-                        )}
+                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: m.color, fontWeight: m.key === "calories" ? 700 : 600 }}>
+                        {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
                       </td>
                     ))}
-                    <td
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "center",
-                        color: "#aaa",
-                        fontSize: 12,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {entry.logged_time || "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "6px 12px",
-                        textAlign: "center",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>{entry.logged_time || "—"}</td>
+                    <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {!savedFoods.some(
-                          (f) =>
-                            f.name.toLowerCase() ===
-                            entry.food_name.toLowerCase(),
-                        ) ? (
+                        {!savedFoods.some((f) => f.name.toLowerCase() === entry.food_name.toLowerCase()) ? (
                           <button
                             onClick={() => handleSaveEntryToMyFoods(entry)}
-                            style={{
-                              background: "#f0f7ff",
-                              border: "1px solid #c8e0ff",
-                              borderRadius: 6,
-                              cursor: "pointer",
-                              color: "#4f8ef7",
-                              fontSize: 14,
-                              lineHeight: 1,
-                              padding: "5px 8px",
-                              minWidth: 32,
-                            }}
+                            style={{ background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
                             title="Save to My Food Library"
-                          >
-                            ☆
-                          </button>
+                          >☆</button>
                         ) : (
                           <div style={{ minWidth: 32, height: 26 }} />
                         )}
                         <button
-                          onClick={() => handleDelete(entry.id)}
-                          style={{
-                            background: "#fff0f0",
-                            border: "1px solid #ffc8c8",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            color: "#e05c5c",
-                            fontSize: 14,
-                            lineHeight: 1,
-                            padding: "5px 8px",
-                            minWidth: 32,
-                          }}
+                          onClick={() => { if (window.confirm(`Remove "${entry.food_name}" from today's log?`)) handleDelete(entry.id); }}
+                          style={{ background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 6, cursor: "pointer", color: "#e05c5c", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
                           title="Remove"
-                        >
-                          ✕
-                        </button>
+                        >✕</button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr
-                  style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}
-                >
-                  <td
-                    style={{
-                      padding: "10px 16px",
-                      fontWeight: 700,
-                      color: "#555",
-                    }}
-                  >
-                    Total
-                  </td>
+                <tr style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}>
+                  <td style={{ padding: "10px 16px", fontWeight: 700, color: "#555" }}>Total</td>
                   <td />
                   {visibleMacroList.map((m) => (
-                    <td
-                      key={m.key}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: "center",
-                        fontWeight: 700,
-                        color: m.color,
-                      }}
-                    >
-                      {m.key === "calories"
-                        ? totals[m.key].toFixed(0)
-                        : totals[m.key].toFixed(1)}
+                    <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", fontWeight: 700, color: m.color }}>
+                      {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
                     </td>
                   ))}
                   <td />
@@ -2077,8 +2092,55 @@ export default function Nutrition() {
               </tfoot>
             </table>
           </div>
-        )}
+          )}
       </div>
+
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={handleBarcodeScan}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
+
+      {logEntryMenu && (
+        <div
+          onClick={() => setLogEntryMenu(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}
+        >
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", background: "#fff", borderRadius: "18px 18px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
+            <p style={{ fontWeight: 700, fontSize: 15, color: "#333", margin: "0 0 4px" }}>{logEntryMenu.food_name}</p>
+            {logEntryMenu.serving_amount && (
+              <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>
+                {fmtServing(logEntryMenu.serving_amount, logEntryMenu.serving_unit)}
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {!savedFoods.some((f) => f.name.toLowerCase() === logEntryMenu.food_name.toLowerCase()) && (
+                <button
+                  onClick={() => { handleSaveEntryToMyFoods(logEntryMenu); setLogEntryMenu(null); }}
+                  style={{ width: "100%", padding: "13px 0", background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 10, color: "#4f8ef7", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+                >
+                  ☆ Save to My Food Library
+                </button>
+              )}
+              <button
+                onClick={() => { if (window.confirm(`Remove "${logEntryMenu.food_name}" from today's log?`)) { handleDelete(logEntryMenu.id); setLogEntryMenu(null); } }}
+                style={{ width: "100%", padding: "13px 0", background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 10, color: "#e05c5c", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+              >
+                Remove from log
+              </button>
+              <button
+                onClick={() => setLogEntryMenu(null)}
+                style={{ width: "100%", padding: "13px 0", background: "#f7f7fb", border: "none", borderRadius: 10, color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {calendarOpen && (
         <NutritionCalendar
