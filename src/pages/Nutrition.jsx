@@ -34,6 +34,7 @@ function clearGuestEntries() {
 }
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
+const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
 
 const EMPTY_FORM = {
   name: "",
@@ -141,6 +142,7 @@ export default function Nutrition() {
   const [myFoodsSearch, setMyFoodsSearch] = useState("");
   const [myFoodsSort, setMyFoodsSort] = useState("name_asc");
   const [libraryAmounts, setLibraryAmounts] = useState({});
+  const [libraryUnits, setLibraryUnits] = useState({});
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
@@ -375,9 +377,12 @@ export default function Nutrition() {
       const qty = Number(p.serving_quantity) || 0;
       const suffix = qty > 0 ? "_serving" : "_100g";
       const servingUnit = (() => {
+        if (p.serving_quantity_unit) return p.serving_quantity_unit.toLowerCase();
         if (!p.serving_size) return "g";
-        const m = p.serving_size.match(/[\d.]+\s*([a-zA-Z]+)/);
-        return m ? m[1].toLowerCase() : "g";
+        const pairs = [...p.serving_size.matchAll(/([\d.]+)\s*([a-zA-Z]+)/g)];
+        // Prefer the pair whose number matches serving_quantity (e.g. "25 g" in "1 tbsp (25 g)")
+        const match = pairs.find(([, num]) => qty > 0 && Math.abs(Number(num) - qty) < 0.5);
+        return (match ? match[2] : pairs[0]?.[2] || "g").toLowerCase();
       })();
       const food = {
         description: p.product_name || p.abbreviated_product_name || "Unknown product",
@@ -591,6 +596,10 @@ export default function Nutrition() {
           serving_amount:
             form.serving_amount !== "" ? Number(form.serving_amount) : null,
           serving_unit: form.serving_unit || "g",
+          serving_weight_g: (() => {
+            const g = UNIT_TO_G[form.serving_unit];
+            return g && form.serving_amount !== "" ? Number(form.serving_amount) * g : null;
+          })(),
         };
         const { data } = await supabase
           .from("custom_foods")
@@ -647,10 +656,14 @@ export default function Nutrition() {
       const customAmount = Number(
         libraryAmounts[food.name] ?? food.serving_amount ?? 1,
       );
-      const baseAmount = Number(food.serving_amount);
-      const scale = baseAmount > 0
-        ? (customAmount > 0 ? customAmount / baseAmount : 1)
-        : customAmount;
+      const selectedUnit = libraryUnits[food.name] ?? food.serving_unit;
+      let scale;
+      if (food.serving_weight_g && UNIT_TO_G[selectedUnit]) {
+        scale = (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
+      } else {
+        const baseAmount = Number(food.serving_amount);
+        scale = baseAmount > 0 ? (customAmount > 0 ? customAmount / baseAmount : 1) : customAmount;
+      }
       const now = new Date();
       const entry = {
         user_id: u.id,
@@ -668,7 +681,7 @@ export default function Nutrition() {
         fiber: Math.round(food.fiber * scale * 10) / 10,
         sugar: Math.round(food.sugar * scale * 10) / 10,
         serving_amount: customAmount || food.serving_amount,
-        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : food.serving_unit,
+        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : selectedUnit,
       };
       const { data } = await supabase
         .from("nutrition_logs")
@@ -682,6 +695,11 @@ export default function Nutrition() {
         showToast("Food logged successfully");
       }
       setLibraryAmounts((prev) => {
+        const next = { ...prev };
+        delete next[food.name];
+        return next;
+      });
+      setLibraryUnits((prev) => {
         const next = { ...prev };
         delete next[food.name];
         return next;
@@ -709,6 +727,10 @@ export default function Nutrition() {
         sugar: entry.sugar,
         serving_amount: entry.serving_amount,
         serving_unit: entry.serving_unit,
+        serving_weight_g: (() => {
+          const g = UNIT_TO_G[entry.serving_unit];
+          return g && entry.serving_amount ? entry.serving_amount * g : null;
+        })(),
       };
       const { data } = await supabase
         .from("custom_foods")
@@ -1602,21 +1624,42 @@ export default function Nutrition() {
                             fontSize: 16,
                           }}
                         />
-                        <span
-                          style={{
-                            border: "1px solid #e0e0e0",
-                            borderLeft: "none",
-                            borderRadius: "0 6px 6px 0",
-                            padding: "4px 7px",
-                            fontSize: 12,
-                            color: "#888",
-                            background: "#fafafa",
-                            display: "flex",
-                            alignItems: "center",
-                          }}
-                        >
-                          {food.serving_unit || "g"}
-                        </span>
+                        {food.serving_weight_g && UNIT_TO_G[food.serving_unit] ? (
+                          <select
+                            value={libraryUnits[food.name] ?? food.serving_unit}
+                            onChange={(e) => setLibraryUnits((prev) => ({ ...prev, [food.name]: e.target.value }))}
+                            style={{
+                              border: "1px solid #e0e0e0",
+                              borderLeft: "none",
+                              borderRadius: "0 6px 6px 0",
+                              padding: "4px 6px",
+                              fontSize: 12,
+                              color: "#555",
+                              background: "#fafafa",
+                              cursor: "pointer",
+                              appearance: "none",
+                              minWidth: 38,
+                            }}
+                          >
+                            {Object.keys(UNIT_TO_G).map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        ) : (
+                          <span
+                            style={{
+                              border: "1px solid #e0e0e0",
+                              borderLeft: "none",
+                              borderRadius: "0 6px 6px 0",
+                              padding: "4px 7px",
+                              fontSize: 12,
+                              color: "#888",
+                              background: "#fafafa",
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            {food.serving_unit || "g"}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div style={{ display: "flex" }}>
