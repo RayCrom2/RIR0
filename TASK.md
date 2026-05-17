@@ -1,11 +1,12 @@
-# Task: Improve Experience of unsigned User
+# Task: Improve UX in my food library and add food form
 
 ## Status: Completed
 
 ## Steps
 
-- [x] 1. Allow users to look around when not signed in. They can go to any page and interact fully with the muscle diagram, if on a computer, but if they try to log a food, add something to their library, etc, prompt them to sign up/log in to save their data
+- [x] 1. In add Food form, have the serving size reflect the last serving size used to add a food
+- [x] 2. Allow users to save as any unit and be able to use saved food and measure it in any other unit.
 
 ## Notes
 
-- If there is a way to store information locally for guest user's implement that so that a user can use the app as a one-day functionality, but nothing is saved to the database until signed in
+- For convenience, we should save or detect the most recently used unit so that someone who measures in grams doesnt have to change it from oz to g every time they add a food item

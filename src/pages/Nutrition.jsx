@@ -35,6 +35,8 @@ function clearGuestEntries() {
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
 const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
+const LAST_UNIT_KEY = "rir0_last_serving_unit";
+const getLastUnit = () => localStorage.getItem(LAST_UNIT_KEY) || "g";
 
 const EMPTY_FORM = {
   name: "",
@@ -136,7 +138,7 @@ function tomorrowStr() {
 export default function Nutrition() {
   const { user, requireAuth, loading } = useAuth();
   const [entries, setEntries] = useState([]);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, serving_unit: getLastUnit() }));
   const [savedFoods, setSavedFoods] = useState([]);
   const [myFoodsOpen, setMyFoodsOpen] = useState(true);
   const [myFoodsSearch, setMyFoodsSearch] = useState("");
@@ -350,6 +352,9 @@ export default function Nutrition() {
   function handleChange(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
     setError("");
+    if (e.target.name === "serving_unit") {
+      localStorage.setItem(LAST_UNIT_KEY, e.target.value);
+    }
     if (e.target.name === "name" && !formOpen) {
       const q = e.target.value.trim();
       clearTimeout(usdaDebounce.current);
@@ -529,7 +534,7 @@ export default function Nutrition() {
       setEntries(next);
       saveGuestEntries(next);
       showToast("Logged! Sign in to save permanently");
-      setForm(EMPTY_FORM);
+      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
       return;
     }
     requireAuth(async () => {
@@ -567,7 +572,7 @@ export default function Nutrition() {
         upsertDailyStatus(todayStr(), next, goals, u.id);
         showToast("Food logged successfully");
       }
-      setForm(EMPTY_FORM);
+      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
     });
   }
 
