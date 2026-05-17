@@ -1673,7 +1673,7 @@ export default function Nutrition() {
                   title="Click to compare with another item"
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
-                    if (e.target.closest("input, button")) return;
+                    if (e.target.closest("input, button, select")) return;
                     if (pinnedFood?.id === food.id) {
                       setPinnedFood(null);
                       setHoveredFood(null);
@@ -1685,7 +1685,7 @@ export default function Nutrition() {
                   }}
                   onMouseEnter={(e) => {
                     if (isMobile) return;
-                    if (e.target.closest("input, button")) return;
+                    if (e.target.closest("input, button, select")) return;
                     setHoveredFood(normalizedFood);
                     setHoveredLibraryId(food.id);
                   }}
