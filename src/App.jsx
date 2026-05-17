@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { capturePwaPrompt, triggerPwaInstall, isPwaStandalone, isPwaIOS, PWA_PROMPT_KEY } from './lib/pwaInstall'
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
 import { MdRestaurant, MdFitnessCenter, MdAccessibility, MdPerson } from 'react-icons/md'
 import DiagramPage from './pages/DiagramPage'
@@ -126,56 +127,37 @@ function BottomNav() {
   );
 }
 
-const PWA_PROMPT_KEY = 'rir0_pwa_prompted';
-
 function PwaInstallPrompt() {
   const { user } = useAuth();
   const [show, setShow] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const deferredPrompt = useRef(null);
+  const [ios, setIos] = useState(false);
   const prevUser = useRef(null);
 
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     const isMobile = window.matchMedia('(max-width: 767px)').matches;
-    if (isStandalone || !isMobile) return;
-
-    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
-
-    const handler = (e) => { e.preventDefault(); deferredPrompt.current = e; };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    if (isPwaStandalone() || !isMobile) return;
+    setIos(isPwaIOS());
+    window.addEventListener('beforeinstallprompt', capturePwaPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', capturePwaPrompt);
   }, []);
 
   useEffect(() => {
     if (user && !prevUser.current) {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       const isMobile = window.matchMedia('(max-width: 767px)').matches;
-      if (!isStandalone && isMobile && !localStorage.getItem(PWA_PROMPT_KEY)) {
-        setShow(true);
-      }
+      if (!isPwaStandalone() && isMobile && !localStorage.getItem(PWA_PROMPT_KEY)) setShow(true);
     }
     prevUser.current = user;
   }, [user]);
 
-  function dismiss() {
-    localStorage.setItem(PWA_PROMPT_KEY, '1');
-    setShow(false);
-  }
-
-  async function handleInstall() {
-    if (deferredPrompt.current) {
-      deferredPrompt.current.prompt();
-      await deferredPrompt.current.userChoice;
-      deferredPrompt.current = null;
-    }
-    dismiss();
-  }
+  function dismiss() { localStorage.setItem(PWA_PROMPT_KEY, '1'); setShow(false); }
 
   if (!show) return null;
+  return <PwaSheet ios={ios} onInstall={async () => { await triggerPwaInstall(); dismiss(); }} onDismiss={dismiss} />;
+}
 
+export function PwaSheet({ ios, onInstall, onDismiss }) {
   return (
-    <div onClick={dismiss} style={{ position: 'fixed', inset: 0, zIndex: 700, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end' }}>
+    <div onClick={onDismiss} style={{ position: 'fixed', inset: 0, zIndex: 700, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: '#fff', borderRadius: '18px 18px 0 0', padding: '24px 20px calc(24px + env(safe-area-inset-bottom, 0px))', boxShadow: '0 -4px 24px rgba(0,0,0,0.15)' }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: '#e0e0e0', margin: '0 auto 22px' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
@@ -185,17 +167,17 @@ function PwaInstallPrompt() {
             <p style={{ margin: '3px 0 0', fontSize: 13, color: '#888' }}>Install for a faster, full-screen experience</p>
           </div>
         </div>
-        {isIOS ? (
+        {ios ? (
           <p style={{ fontSize: 13, color: '#666', lineHeight: 1.7, background: '#f7f7fb', borderRadius: 10, padding: '12px 14px', margin: '0 0 12px' }}>
             Tap the <strong>Share</strong> button <span style={{ fontSize: 17, verticalAlign: 'middle' }}>⎙</span> at the bottom of Safari, then choose <strong>Add to Home Screen</strong>.
           </p>
         ) : (
-          <button onClick={handleInstall} style={{ width: '100%', padding: '13px 0', background: '#ff8c42', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
+          <button onClick={onInstall} style={{ width: '100%', padding: '13px 0', background: '#ff8c42', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: 'pointer', marginBottom: 10 }}>
             Install App
           </button>
         )}
-        <button onClick={dismiss} style={{ width: '100%', padding: '13px 0', background: '#f7f7fb', border: 'none', borderRadius: 10, color: '#888', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-          {isIOS ? 'Got it' : 'Not now'}
+        <button onClick={onDismiss} style={{ width: '100%', padding: '13px 0', background: '#f7f7fb', border: 'none', borderRadius: 10, color: '#888', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          {ios ? 'Got it' : 'Not now'}
         </button>
       </div>
     </div>

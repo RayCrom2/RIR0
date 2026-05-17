@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { PwaSheet } from "../App";
+import { triggerPwaInstall, isPwaStandalone, isPwaIOS, hasPwaPrompt } from "../lib/pwaInstall";
 import {
   ACTIVITY_LEVELS,
   DEFICIT_SEVERITY,
@@ -24,6 +26,11 @@ function kgToLbs(kg) {
 }
 function lbsToKg(lbs) {
   return Math.round((Number(lbs) / 2.20462) * 10) / 10;
+}
+function dispWeight(kg, unit, places = 1) {
+  if (!kg) return "—";
+  const val = unit === "lbs" ? Number(kg) * 2.20462 : Number(kg);
+  return val.toFixed(places);
 }
 
 const MACRO_FIELDS = [
@@ -141,6 +148,7 @@ const DEFAULT_GOALS = {
   fitness_goals: ["maintain"],
   activity_level: "moderate",
   weigh_in_frequency: "weekly",
+  weight_decimal_places: 1,
 };
 
 export default function Profile() {
@@ -157,6 +165,8 @@ export default function Profile() {
   const [weighInOpen, setWeighInOpen] = useState(false);
   const [weighInValue, setWeighInValue] = useState("");
   const [isReWeigh, setIsReWeigh] = useState(false);
+  const [pwaSheetOpen, setPwaSheetOpen] = useState(false);
+  const showPwaCard = !isPwaStandalone() && window.matchMedia("(max-width: 767px)").matches;
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
   const [surplusSeverity, setSurplusSeverity] = useState("moderate");
   const [weightLogs, setWeightLogs] = useState([]);
@@ -292,11 +302,7 @@ export default function Profile() {
     setIsReWeigh(true);
     if (weightLogs.length > 0) {
       const latest = weightLogs[weightLogs.length - 1];
-      setWeighInValue(
-        weightUnit === "lbs"
-          ? String(kgToLbs(latest.weight_kg))
-          : String(Math.round(latest.weight_kg * 10) / 10),
-      );
+      setWeighInValue(dispWeight(latest.weight_kg, weightUnit, goals.weight_decimal_places || 1));
     } else {
       setWeighInValue("");
     }
@@ -744,9 +750,7 @@ export default function Profile() {
                       marginRight: 2,
                     }}
                   >
-                    {weightUnit === "lbs"
-                      ? kgToLbs(latestWeightKg)
-                      : Math.round(latestWeightKg * 10) / 10}
+                    {dispWeight(latestWeightKg, weightUnit, goals.weight_decimal_places || 1)}
                   </button>
                 ) : (
                   <span
@@ -792,6 +796,20 @@ export default function Profile() {
                         }}
                       >
                         {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 2 }}>
+                <span style={{ fontSize: 12, color: "#aaa", flex: 1 }}>Decimal places</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[1, 2].map((n) => {
+                    const active = (goals.weight_decimal_places || 1) === n;
+                    return (
+                      <button key={n} type="button" onClick={() => setG("weight_decimal_places", n)}
+                        style={{ ...unitToggle, fontSize: 11, background: active ? "#ff8c42" : "#f0f0f0", color: active ? "#fff" : "#888" }}>
+                        {n}
                       </button>
                     );
                   })}
@@ -988,6 +1006,7 @@ export default function Profile() {
                 unit={weightUnit}
                 isLoss={isLoss}
                 isGain={isGain}
+                decimalPlaces={goals.weight_decimal_places || 1}
               />
             </Section>
           )}
@@ -1297,6 +1316,31 @@ export default function Profile() {
         </form>
       )}
 
+      {showPwaCard && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14 }}>
+          <img src="/pwa-192x192.png" alt="app icon" style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14, color: "#333" }}>Add to Home Screen</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Install for a full-screen experience</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPwaSheetOpen(true)}
+            style={{ flexShrink: 0, background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            Install
+          </button>
+        </div>
+      )}
+
+      {pwaSheetOpen && (
+        <PwaSheet
+          ios={isPwaIOS()}
+          onInstall={async () => { await triggerPwaInstall(); setPwaSheetOpen(false); }}
+          onDismiss={() => setPwaSheetOpen(false)}
+        />
+      )}
+
       {weighInOpen && (
         <div
           onClick={(e) => {
@@ -1427,11 +1471,11 @@ export default function Profile() {
   );
 }
 
-function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain }) {
+function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPlaces = 1 }) {
+  const [cursor, setCursor] = useState(null); // index into logs
+
   const toDisp = (kg) =>
-    unit === "lbs"
-      ? Math.round(kg * 2.20462 * 10) / 10
-      : Math.round(kg * 10) / 10;
+    (unit === "lbs" ? kg * 2.20462 : kg).toFixed(decimalPlaces);
   const unitLabel = unit === "lbs" ? "lbs" : "kg";
 
   const allKg = logs.map((l) => l.weight_kg);
@@ -1517,7 +1561,31 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain }) {
       )}
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", display: "block" }}
+        style={{ width: "100%", display: "block", touchAction: "none" }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const svgX = ((e.clientX - rect.left) / rect.width) * W;
+          let nearest = 0, nearestDist = Infinity;
+          logs.forEach((l, i) => {
+            const d = Math.abs(xOf(l.date) - svgX);
+            if (d < nearestDist) { nearestDist = d; nearest = i; }
+          });
+          setCursor(nearest);
+        }}
+        onMouseLeave={() => setCursor(null)}
+        onTouchMove={(e) => {
+          e.preventDefault();
+          const touch = e.touches[0];
+          const rect = e.currentTarget.getBoundingClientRect();
+          const svgX = ((touch.clientX - rect.left) / rect.width) * W;
+          let nearest = 0, nearestDist = Infinity;
+          logs.forEach((l, i) => {
+            const d = Math.abs(xOf(l.date) - svgX);
+            if (d < nearestDist) { nearestDist = d; nearest = i; }
+          });
+          setCursor(nearest);
+        }}
+        onTouchEnd={() => setCursor(null)}
       >
         {/* Grid + Y labels */}
         {yTicks.map((kg, i) => {
@@ -1631,6 +1699,29 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain }) {
             ).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </text>
         )}
+
+        {/* Interactive cursor tooltip */}
+        {cursor !== null && (() => {
+          const log = logs[cursor];
+          const cx = xOf(log.date);
+          const cy = yOf(log.weight_kg);
+          const dateLabel = new Date(log.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const weightLabel = `${toDisp(log.weight_kg)} ${unitLabel}`;
+          const tipW = 72, tipH = 30, tipR = 5;
+          let tipX = cx - tipW / 2;
+          if (tipX < pL) tipX = pL;
+          if (tipX + tipW > W - pR) tipX = W - pR - tipW;
+          const tipY = cy - tipH - 10 < pT ? cy + 12 : cy - tipH - 10;
+          return (
+            <g pointerEvents="none">
+              <line x1={cx} y1={pT} x2={cx} y2={H - pB} stroke="#bbb" strokeWidth="1" strokeDasharray="4 3" />
+              <circle cx={cx} cy={cy} r="5" fill="#ff8c42" stroke="#fff" strokeWidth="2" />
+              <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={tipR} ry={tipR} fill="rgba(50,50,50,0.85)" />
+              <text x={tipX + tipW / 2} y={tipY + 11} textAnchor="middle" fontSize="9" fill="#fff" fontWeight="600">{weightLabel}</text>
+              <text x={tipX + tipW / 2} y={tipY + 23} textAnchor="middle" fontSize="8" fill="#ccc">{dateLabel}</text>
+            </g>
+          );
+        })()}
       </svg>
 
       {/* Legend */}
