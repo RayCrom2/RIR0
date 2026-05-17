@@ -22,10 +22,10 @@ function ftInToCm(ft, inch) {
   return Math.round((Number(ft || 0) * 12 + Number(inch || 0)) * 2.54);
 }
 function kgToLbs(kg) {
-  return Math.round(Number(kg) * 2.20462);
+  return Math.round(Number(kg) * 2.20462 * 10) / 10;
 }
 function lbsToKg(lbs) {
-  return Math.round((Number(lbs) / 2.20462) * 10) / 10;
+  return Number((Number(lbs) / 2.20462).toFixed(5));
 }
 function dispWeight(kg, unit, places = 1) {
   if (!kg) return "—";
@@ -1317,7 +1317,7 @@ export default function Profile() {
       )}
 
       {showPwaCard && (
-        <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>
           <img src="/pwa-192x192.png" alt="app icon" style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14, color: "#333" }}>Add to Home Screen</p>
@@ -1540,8 +1540,24 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPla
     }
   }
 
-  // Y-axis tick values
-  const yTicks = [0, 0.33, 0.67, 1].map((t) => yMin + t * (yMax - yMin));
+  // Y-axis: nice round ticks in display unit
+  const dispMin = unit === "lbs" ? yMin * 2.20462 : yMin;
+  const dispMax = unit === "lbs" ? yMax * 2.20462 : yMax;
+  const dispRange = dispMax - dispMin;
+  const niceStep = (() => {
+    for (const s of [1, 2, 2.5, 5, 10, 20, 25, 50, 100]) {
+      if (dispRange / s <= 5) return s;
+    }
+    return 100;
+  })();
+  const firstTick = Math.ceil(dispMin / niceStep) * niceStep;
+  const yTicks = [];
+  for (let v = firstTick; v <= dispMax + 1e-9; v = Math.round((v + niceStep) * 1e6) / 1e6) {
+    yTicks.push(v);
+  }
+  const kgOfDisp = (v) => unit === "lbs" ? v / 2.20462 : v;
+  const fmtTick = (v) => Number.isInteger(v) ? String(v) : v.toFixed(1);
+
   const goalColor = isLoss ? "#5cb85c" : isGain ? "#4f8ef7" : "#888";
 
   return (
@@ -1574,7 +1590,6 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPla
         }}
         onMouseLeave={() => setCursor(null)}
         onTouchMove={(e) => {
-          e.preventDefault();
           const touch = e.touches[0];
           const rect = e.currentTarget.getBoundingClientRect();
           const svgX = ((touch.clientX - rect.left) / rect.width) * W;
@@ -1588,26 +1603,14 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPla
         onTouchEnd={() => setCursor(null)}
       >
         {/* Grid + Y labels */}
-        {yTicks.map((kg, i) => {
-          const y = yOf(kg);
+        {yTicks.map((dispVal) => {
+          const y = yOf(kgOfDisp(dispVal));
+          if (y < pT - 2 || y > H - pB + 2) return null;
           return (
-            <g key={i}>
-              <line
-                x1={pL}
-                y1={y}
-                x2={W - pR}
-                y2={y}
-                stroke="#f0f0f0"
-                strokeWidth="1"
-              />
-              <text
-                x={pL - 4}
-                y={y + 3.5}
-                textAnchor="end"
-                fontSize="9"
-                fill="#ccc"
-              >
-                {toDisp(kg)}
+            <g key={dispVal}>
+              <line x1={pL} y1={y} x2={W - pR} y2={y} stroke="#f0f0f0" strokeWidth="1" />
+              <text x={pL - 4} y={y + 3.5} textAnchor="end" fontSize="9" fill="#bbb">
+                {fmtTick(dispVal)}
               </text>
             </g>
           );
