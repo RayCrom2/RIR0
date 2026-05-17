@@ -94,6 +94,16 @@ const MACRO_VALUE_KEYS = new Set(
   MACRO_FIELDS.flatMap((f) => [f.key, f.minKey]),
 );
 
+function detectSeverity(data, severities) {
+  const CMP_KEYS = ["calories", "protein", "carbs", "fat", "fiber"];
+  for (const s of severities) {
+    const calc = calcSuggested({ ...data, deficitSeverity: s.value, surplusSeverity: s.value });
+    if (!calc) return "custom";
+    if (CMP_KEYS.every((k) => Number(data[k]) === calc[k])) return s.value;
+  }
+  return "custom";
+}
+
 const GOALS_OPTIONS = [
   { value: "lose_weight", label: "Lose weight" },
   { value: "lose_fat", label: "Lose fat" },
@@ -168,6 +178,7 @@ export default function Profile() {
   const [isReWeigh, setIsReWeigh] = useState(false);
   const [goalWeightEditing, setGoalWeightEditing] = useState(false);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
+  const [unitPrefsOpen, setUnitPrefsOpen] = useState(false);
   const [pwaSheetOpen, setPwaSheetOpen] = useState(false);
   const showPwaCard = !isPwaStandalone() && window.matchMedia("(max-width: 767px)").matches;
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
@@ -195,6 +206,12 @@ export default function Profile() {
               : ["maintain"];
           }
           setGoals(merged);
+          const fg = merged.fitness_goals ?? ["maintain"];
+          if (fg.some((g) => ["lose_weight", "lose_fat"].includes(g))) {
+            setDeficitSeverity(detectSeverity(merged, DEFICIT_SEVERITY));
+          } else if (fg.some((g) => ["gain_muscle", "gain_weight"].includes(g))) {
+            setSurplusSeverity(detectSeverity(merged, SURPLUS_SEVERITY));
+          }
           const enabled = {};
           MACRO_FIELDS.forEach((f) => {
             if (data[f.minKey] != null) enabled[f.key] = true;
@@ -502,45 +519,11 @@ export default function Profile() {
                   Height
                 </span>
                 {goals.height_cm ? (
-                  <>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {["cm", "ftin"].map((u) => (
-                        <button
-                          key={u}
-                          type="button"
-                          onClick={() => toggleHeightUnit(u)}
-                          style={{
-                            ...unitToggle,
-                            background:
-                              heightUnit === u ? "#ff8c42" : "#f0f0f0",
-                            color: heightUnit === u ? "#fff" : "#888",
-                          }}
-                        >
-                          {u === "ftin" ? "ft/in" : "cm"}
-                        </button>
-                      ))}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        color: "#555",
-                        minWidth: 60,
-                        textAlign: "right",
-                      }}
-                    >
-                      {heightUnit === "cm"
-                        ? goals.height_cm
-                        : (() => {
-                            const c = cmToFtIn(goals.height_cm);
-                            return `${c.ft}′${c.in}″`;
-                          })()}
-                    </span>
-                    {heightUnit === "cm" && (
-                      <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>
-                        cm
-                      </span>
-                    )}
-                  </>
+                  <span style={{ fontSize: 14, color: "#555" }}>
+                    {heightUnit === "cm"
+                      ? `${goals.height_cm} cm`
+                      : (() => { const c = cmToFtIn(goals.height_cm); return `${c.ft}′${c.in}″`; })()}
+                  </span>
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -712,19 +695,55 @@ export default function Profile() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 2 }}>
-                <span style={{ fontSize: 12, color: "#aaa", flex: 1 }}>Decimal places</span>
-                <div style={{ display: "flex", gap: 4 }}>
-                  {[1, 2].map((n) => {
-                    const active = (goals.weight_decimal_places || 1) === n;
-                    return (
-                      <button key={n} type="button" onClick={() => setG("weight_decimal_places", n)}
-                        style={{ ...unitToggle, fontSize: 11, background: active ? "#ff8c42" : "#f0f0f0", color: active ? "#fff" : "#888" }}>
-                        {n}
-                      </button>
-                    );
-                  })}
-                </div>
+                <span style={{ fontSize: 12, color: "#aaa", flex: 1 }}>Unit Preferences</span>
+                <button
+                  type="button"
+                  onClick={() => setUnitPrefsOpen((o) => !o)}
+                  style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}
+                >
+                  {unitPrefsOpen ? "Hide" : "Edit"}
+                </button>
               </div>
+              {unitPrefsOpen && (
+                <div style={{ background: "#f7f7fb", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Weight unit</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {["kg", "lbs"].map((u) => (
+                        <button key={u} type="button" onClick={() => toggleWeightUnit(u)}
+                          style={{ ...unitToggle, background: weightUnit === u ? "#ff8c42" : "#e8e8e8", color: weightUnit === u ? "#fff" : "#888" }}>
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Height unit</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {["cm", "ftin"].map((u) => (
+                        <button key={u} type="button" onClick={() => toggleHeightUnit(u)}
+                          style={{ ...unitToggle, background: heightUnit === u ? "#ff8c42" : "#e8e8e8", color: heightUnit === u ? "#fff" : "#888" }}>
+                          {u === "ftin" ? "ft/in" : "cm"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Weight decimal places</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {[1, 2].map((n) => {
+                        const active = (goals.weight_decimal_places || 1) === n;
+                        return (
+                          <button key={n} type="button" onClick={() => setG("weight_decimal_places", n)}
+                            style={{ ...unitToggle, background: active ? "#ff8c42" : "#e8e8e8", color: active ? "#fff" : "#888" }}>
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
               {(isLoss || isGain) && (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>
@@ -1085,31 +1104,37 @@ export default function Profile() {
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const calc = calcSuggested({
-                      ...goals,
-                      age: computedAge,
-                      deficitSeverity,
-                      surplusSeverity,
-                    });
-                    if (calc) setGoals((g) => ({ ...g, ...calc }));
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "9px 0",
-                    background: "#ff8c42",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Apply suggested targets
-                </button>
+                {(() => {
+                  const isCustom = (isLoss ? deficitSeverity : surplusSeverity) === "custom";
+                  return (
+                    <button
+                      type="button"
+                      disabled={isCustom}
+                      onClick={() => {
+                        const calc = calcSuggested({
+                          ...goals,
+                          age: computedAge,
+                          deficitSeverity,
+                          surplusSeverity,
+                        });
+                        if (calc) setGoals((g) => ({ ...g, ...calc }));
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "9px 0",
+                        background: isCustom ? "#e0e0e0" : "#ff8c42",
+                        color: isCustom ? "#aaa" : "#fff",
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: isCustom ? "default" : "pointer",
+                      }}
+                    >
+                      Apply suggested targets
+                    </button>
+                  );
+                })()}
               </div>
             )}
 
