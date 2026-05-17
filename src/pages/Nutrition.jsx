@@ -38,6 +38,18 @@ const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
 const LAST_UNIT_KEY = "rir0_last_serving_unit";
 const getLastUnit = () => localStorage.getItem(LAST_UNIT_KEY) || "g";
 
+const WEIGH_FREQ_OPTIONS = [
+  { value: "daily",    days: 1  },
+  { value: "3x_week", days: 3  },
+  { value: "weekly",  days: 7  },
+  { value: "biweekly",days: 14 },
+];
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const EMPTY_FORM = {
   name: "",
   calories: "",
@@ -174,8 +186,10 @@ export default function Nutrition() {
   const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
   const [scannerOpen, setScannerOpen] = useState(false);
   const [logEntryMenu, setLogEntryMenu] = useState(null);
+  const [planMode, setPlanMode] = useState(false);
+  const [plannedEntries, setPlannedEntries] = useState([]);
+  const [planExitOpen, setPlanExitOpen] = useState(false);
   const [entriesLoaded, setEntriesLoaded] = useState(false);
-  const [weightToday, setWeightToday] = useState(null);
   const [weightInput, setWeightInput] = useState("");
   const WEIGHT_DISMISS_KEY = "rir0_weight_dismissed";
   const toastTimer = useRef(null);
@@ -288,16 +302,6 @@ export default function Nutrition() {
     });
   }, [user, loading]);
 
-  useEffect(() => {
-    if (!user || loading) return;
-    supabase
-      .from("weight_logs")
-      .select("weight_kg")
-      .eq("user_id", user.id)
-      .eq("date", todayStr())
-      .maybeSingle()
-      .then(({ data }) => setWeightToday(data ? Number(data.weight_kg) : false));
-  }, [user, loading]);
 
   useEffect(() => {
     if (!user) {
@@ -311,6 +315,15 @@ export default function Nutrition() {
       .order("name")
       .then(({ data }) => setSavedFoods(data || []));
   }, [user]);
+
+  useEffect(() => {
+    if (planExitOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [planExitOpen]);
 
   // ── load nutrition goals from DB
   useEffect(() => {
@@ -514,6 +527,28 @@ export default function Nutrition() {
       setError("Enter a valid calorie amount.");
       return;
     }
+    if (planMode) {
+      const now = new Date();
+      const entry = {
+        id: "plan_" + Date.now(),
+        planned: true,
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        food_name: form.name.trim(),
+        calories: Number(form.calories) || 0,
+        protein: Number(form.protein) || 0,
+        fat: Number(form.fat) || 0,
+        carbs: Number(form.carbs) || 0,
+        fiber: Number(form.fiber) || 0,
+        sugar: Number(form.sugar) || 0,
+        serving_amount: form.serving_amount !== "" ? Number(form.serving_amount) : null,
+        serving_unit: form.serving_unit || "g",
+      };
+      setPlannedEntries((prev) => [...prev, entry]);
+      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+      showToast("Added to plan", "#4f8ef7");
+      return;
+    }
     if (!user) {
       const now = new Date();
       const entry = {
@@ -622,6 +657,10 @@ export default function Nutrition() {
   }
 
   async function handleDelete(id) {
+    if (String(id).startsWith("plan_")) {
+      setPlannedEntries((prev) => prev.filter((e) => e.id !== id));
+      return;
+    }
     if (String(id).startsWith("guest_")) {
       const next = entries.filter((e) => e.id !== id);
       setEntries(next);
@@ -654,6 +693,38 @@ export default function Nutrition() {
   }
 
   function handleAddFromLibrary(food) {
+    if (planMode) {
+      const customAmount = Number(libraryAmounts[food.name] ?? food.serving_amount ?? 1);
+      const selectedUnit = libraryUnits[food.name] ?? food.serving_unit;
+      let scale;
+      if (food.serving_weight_g && UNIT_TO_G[selectedUnit]) {
+        scale = (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
+      } else {
+        const baseAmount = Number(food.serving_amount);
+        scale = baseAmount > 0 ? (customAmount > 0 ? customAmount / baseAmount : 1) : customAmount;
+      }
+      const now = new Date();
+      const entry = {
+        id: "plan_" + Date.now(),
+        planned: true,
+        logged_at: todayStr(),
+        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        food_name: food.name,
+        calories: Math.round(food.calories * scale),
+        protein: Math.round(food.protein * scale * 10) / 10,
+        fat: Math.round(food.fat * scale * 10) / 10,
+        carbs: Math.round(food.carbs * scale * 10) / 10,
+        fiber: Math.round(food.fiber * scale * 10) / 10,
+        sugar: Math.round(food.sugar * scale * 10) / 10,
+        serving_amount: customAmount || food.serving_amount,
+        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : selectedUnit,
+      };
+      setPlannedEntries((prev) => [...prev, entry]);
+      setLibraryAmounts((prev) => { const n = { ...prev }; delete n[food.name]; return n; });
+      setLibraryUnits((prev) => { const n = { ...prev }; delete n[food.name]; return n; });
+      showToast("Added to plan", "#4f8ef7");
+      return;
+    }
     requireAuth(async () => {
       const {
         data: { user: u },
@@ -760,18 +831,19 @@ export default function Nutrition() {
     const kg = prefUnit === "lbs"
       ? Math.round(Number(weightInput) / 2.20462 * 10) / 10
       : Number(weightInput);
+    const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === (goals.weigh_in_frequency || "weekly"))?.days ?? 7;
+    const nextWeighInDate = addDays(todayStr(), freqDays);
     await Promise.all([
       supabase.from("weight_logs").upsert(
         { user_id: user.id, date: todayStr(), weight_kg: kg },
         { onConflict: "user_id,date" }
       ),
       supabase.from("nutrition_goals").upsert(
-        { user_id: user.id, weight_kg: kg },
+        { user_id: user.id, weight_kg: kg, next_weigh_in_date: nextWeighInDate },
         { onConflict: "user_id" }
       ),
     ]);
-    setWeightToday(kg);
-    setGoals(g => ({ ...g, weight_kg: kg }));
+    setGoals(g => ({ ...g, weight_kg: kg, next_weigh_in_date: nextWeighInDate }));
     setWeightInput("");
   }
 
@@ -813,8 +885,14 @@ export default function Nutrition() {
 
   const sortedEntries = [...entries].sort((a, b) => parseLoggedTime(a.logged_time) - parseLoggedTime(b.logged_time));
 
-  const totals = MACROS.reduce((acc, m) => {
+  const actualTotals = MACROS.reduce((acc, m) => {
     acc[m.key] = entries.reduce((sum, e) => sum + (e[m.key] || 0), 0);
+    return acc;
+  }, {});
+
+  const totals = MACROS.reduce((acc, m) => {
+    const planned = planMode ? plannedEntries.reduce((sum, e) => sum + (e[m.key] || 0), 0) : 0;
+    acc[m.key] = actualTotals[m.key] + planned;
     return acc;
   }, {});
 
@@ -874,6 +952,8 @@ export default function Nutrition() {
           padding: "16px 20px",
           boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
           marginBottom: 24,
+          border: planMode ? "1.5px solid #93c5fd" : "1.5px solid transparent",
+          transition: "border-color 0.2s",
         }}
       >
         <div
@@ -893,6 +973,7 @@ export default function Nutrition() {
               letterSpacing: "0.05em",
             }}
           >
+            {planMode && <span style={{ color: "#4f8ef7", marginRight: 6 }}>Planning ·</span>}
             Daily Progress
           </span>
           <div ref={menuRef} style={{ position: "relative" }}>
@@ -1020,12 +1101,21 @@ export default function Nutrition() {
                     : m.unit}
                 </span>
               </div>
-              <div style={{ height: 8, background: "#f0f0f0", borderRadius: 99, position: "relative" }}>
-                {isTracked && (
-                  <div style={{ height: "100%", width: `${pct}%`, background: m.color, borderRadius: 99, transition: "width 0.3s ease" }} />
-                )}
+              <div style={{ height: 8, background: "#f0f0f0", borderRadius: 99, position: "relative", overflow: "hidden" }}>
+                {isTracked && (() => {
+                  const actualPct = Math.min(100, (actualTotals[m.key] / maxVal) * 100);
+                  const plannedPct = planMode ? Math.min(100 - actualPct, pct - actualPct) : 0;
+                  return (
+                    <>
+                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${actualPct}%`, background: m.color, transition: "width 0.3s ease" }} />
+                      {plannedPct > 0 && (
+                        <div style={{ position: "absolute", left: `${actualPct}%`, top: 0, height: "100%", width: `${plannedPct}%`, background: "#93c5fd", transition: "width 0.3s ease" }} />
+                      )}
+                    </>
+                  );
+                })()}
                 {minPct != null && (
-                  <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.25)", borderRadius: 1 }} />
+                  <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.25)", borderRadius: 1, zIndex: 1 }} />
                 )}
               </div>
             </div>
@@ -1034,7 +1124,8 @@ export default function Nutrition() {
       </div>
 
       {/* Daily weigh-in prompt */}
-      {user && entriesLoaded && entries.length === 0 && weightToday === false
+      {user && entriesLoaded && entries.length === 0
+        && (!goals.next_weigh_in_date || todayStr() >= goals.next_weigh_in_date)
         && localStorage.getItem(WEIGHT_DISMISS_KEY) !== todayStr()
         && !goals.hide_weight_prompt && (
         <div style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", marginBottom: 24 }}>
@@ -1233,6 +1324,32 @@ export default function Nutrition() {
             title={formOpen ? "Close form" : "Add food manually"}
           >
             {formOpen ? "−" : "+"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (planMode) {
+                if (plannedEntries.length > 0) setPlanExitOpen(true);
+                else setPlanMode(false);
+              } else {
+                setPlanMode(true);
+              }
+            }}
+            style={{
+              background: planMode ? "#eff6ff" : "none",
+              color: planMode ? "#4f8ef7" : "#888",
+              border: planMode ? "1.5px solid #93c5fd" : "1px solid #e0e0e0",
+              borderRadius: 8,
+              height: 38,
+              padding: "0 12px",
+              fontSize: 13,
+              fontWeight: planMode ? 700 : 500,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+            title={planMode ? "Exit plan mode" : "Plan your meals"}
+          >
+            {planMode ? "Planning…" : "Plan"}
           </button>
           {isMobile && (
             <button
@@ -2012,7 +2129,7 @@ export default function Nutrition() {
           )}
         </div>
 
-        {entries.length === 0 ? (
+        {entries.length === 0 && plannedEntries.length === 0 ? (
           <p
             style={{
               textAlign: "center",
@@ -2046,6 +2163,36 @@ export default function Nutrition() {
                           {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
                         </span>
                         <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
+                          {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {planMode && plannedEntries.map((entry) => (
+                <div key={entry.id}
+                  style={{ background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "#1d4ed8", flex: 1, marginRight: 8 }}>{entry.food_name}</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {entry.serving_amount ? (
+                        <span style={{ fontSize: 12, color: "#93c5fd", whiteSpace: "nowrap" }}>
+                          {fmtServing(entry.serving_amount, entry.serving_unit)}
+                        </span>
+                      ) : null}
+                      <button onClick={() => handleDelete(entry.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", fontSize: 15, lineHeight: 1, padding: "2px 4px" }}
+                        title="Remove from plan">✕</button>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    {visibleMacroList.map((m) => (
+                      <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
+                        <span style={{ fontSize: 10, color: "#93c5fd", fontWeight: 500, marginBottom: 1 }}>
+                          {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
+                        </span>
+                        <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 600 }}>
                           {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
                         </span>
                       </div>
@@ -2126,6 +2273,27 @@ export default function Nutrition() {
                     </td>
                   </tr>
                 ))}
+                {planMode && plannedEntries.map((entry) => (
+                  <tr key={entry.id} style={{ borderTop: "1px solid #dbeafe", background: "#eff6ff" }}>
+                    <td style={{ padding: "10px 16px", fontWeight: 500, color: "#1d4ed8" }}>{entry.food_name}</td>
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {fmtServing(entry.serving_amount, entry.serving_unit)}
+                    </td>
+                    {visibleMacroList.map((m) => (
+                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: "#4f8ef7", fontWeight: m.key === "calories" ? 700 : 600 }}>
+                        {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
+                      </td>
+                    ))}
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>{entry.logged_time || "—"}</td>
+                    <td style={{ padding: "6px 12px", textAlign: "center" }}>
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
+                        title="Remove from plan"
+                      >✕</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}>
@@ -2144,6 +2312,150 @@ export default function Nutrition() {
           </div>
           )}
       </div>
+
+      {planExitOpen && (() => {
+        const logAll = async () => {
+          if (user) {
+            const { data: { user: u } } = await supabase.auth.getUser();
+            const toInsert = plannedEntries.map((e) => ({
+              user_id: u.id, logged_at: e.logged_at, logged_time: e.logged_time,
+              food_name: e.food_name, calories: e.calories, protein: e.protein,
+              fat: e.fat, carbs: e.carbs, fiber: e.fiber, sugar: e.sugar,
+              serving_amount: e.serving_amount, serving_unit: e.serving_unit,
+            }));
+            const { data } = await supabase.from("nutrition_logs").insert(toInsert).select();
+            if (data) {
+              const next = [...entries, ...data];
+              setEntries(next);
+              upsertDailyStatus(todayStr(), next, goals, u.id);
+            }
+          } else {
+            const next = [...entries, ...plannedEntries.map((e) => ({ ...e, id: "guest_" + Date.now() + Math.random() }))];
+            setEntries(next);
+            saveGuestEntries(next);
+          }
+          setPlannedEntries([]);
+          setPlanMode(false);
+          setPlanExitOpen(false);
+          showToast("Plan logged!", "#4f8ef7");
+        };
+        const discard = () => { setPlannedEntries([]); setPlanMode(false); setPlanExitOpen(false); };
+        const n = plannedEntries.length;
+        const logLabel = `Log ${n} ${n === 1 ? "item" : "items"}`;
+
+        if (isMobile) {
+          return (
+            <div onClick={() => setPlanExitOpen(false)}
+              style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}>
+              <div onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", background: "#fff", borderRadius: "18px 18px 0 0", padding: "24px 20px calc(24px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
+                <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 20px" }} />
+                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16, color: "#333" }}>Exit Plan Mode</p>
+                <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>
+                  You have {n} planned {n === 1 ? "item" : "items"}. Log them or discard?
+                </p>
+                <button onClick={logAll}
+                  style={{ width: "100%", padding: "13px 0", background: "#4f8ef7", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>
+                  {logLabel}
+                </button>
+                <button onClick={discard}
+                  style={{ width: "100%", padding: "13px 0", background: "#f7f7fb", border: "none", borderRadius: 10, color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        const plannedTotals = MACROS.reduce((acc, m) => {
+          acc[m.key] = plannedEntries.reduce((s, e) => s + (e[m.key] || 0), 0);
+          return acc;
+        }, {});
+
+        return (
+          <div onClick={() => setPlanExitOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, boxShadow: "0 8px 40px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", padding: "18px 22px 14px", borderBottom: "1px solid #f0f0f0" }}>
+                <span style={{ fontWeight: 700, fontSize: 16, color: "#333", flex: 1 }}>Log Plan?</span>
+                <button onClick={() => setPlanExitOpen(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>✕</button>
+              </div>
+              {/* Planned items list */}
+              <div style={{ maxHeight: 220, overflowY: "auto", overscrollBehavior: "contain", padding: "0 22px" }}>
+                {/* Column headers */}
+                <div style={{ display: "flex", alignItems: "center", padding: "8px 0 4px", borderBottom: "1px solid #f0f0f0" }}>
+                  <span style={{ flex: 1, marginRight: 12 }} />
+                  <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginRight: 14, minWidth: 60 }}>Serving</span>
+                  <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                    {visibleMacroList.map((m) => (
+                      <span key={m.key} style={{ fontSize: 10, color: "#bbb", fontWeight: 600, minWidth: 34, textAlign: "center" }}>{m.label}</span>
+                    ))}
+                  </div>
+                </div>
+                {plannedEntries.map((e) => (
+                  <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f7f7f7" }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, marginRight: 12 }}>{e.food_name}</span>
+                    <span style={{ fontSize: 12, color: "#93c5fd", marginRight: 14, whiteSpace: "nowrap", minWidth: 60 }}>
+                      {fmtServing(e.serving_amount, e.serving_unit)}
+                    </span>
+                    <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                      {visibleMacroList.map((m) => (
+                        <span key={m.key} style={{ fontSize: 12, color: m.color, fontWeight: 600, minWidth: 34, textAlign: "center" }}>
+                          {m.key === "calories" ? e[m.key] : e[m.key]?.toFixed(1)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Macro additions summary */}
+              <div style={{ background: "#eff6ff", margin: "14px 22px 8px", borderRadius: 8, padding: "10px 14px" }}>
+                <span style={{ fontSize: 11, color: "#4f8ef7", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Adding</span>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
+                  {visibleMacroList.map((m) => (
+                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
+                      <span style={{ fontSize: 10, color: "#93c5fd", fontWeight: 600, marginBottom: 1 }}>{m.label}</span>
+                      <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        +{m.key === "calories" ? plannedTotals[m.key].toFixed(0) : plannedTotals[m.key].toFixed(1)}
+                        <span style={{ fontWeight: 400, fontSize: 10, color: "#93c5fd" }}> {m.unit}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Projected day totals */}
+              <div style={{ background: "#f7f7fb", margin: "0 22px 14px", borderRadius: 8, padding: "10px 14px" }}>
+                <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Updated Daily Progress</span>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
+                  {visibleMacroList.map((m) => (
+                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
+                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 1 }}>{m.label}</span>
+                      <span style={{ fontSize: 13, color: "#555", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
+                        <span style={{ fontWeight: 400, fontSize: 10, color: "#bbb" }}> {m.unit}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Buttons */}
+              <div style={{ display: "flex", gap: 10, padding: "0 22px 20px" }}>
+                <button onClick={discard}
+                  style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555", fontWeight: 600 }}>
+                  Discard
+                </button>
+                <button onClick={logAll}
+                  style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                  {logLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {scannerOpen && (
         <BarcodeScanner

@@ -1,12 +1,13 @@
-# Task: Improve UX in my food library and add food form
+# Task: Add Plan Mode to Nutrition Page
 
 ## Status: Completed
 
 ## Steps
 
-- [x] 1. In add Food form, have the serving size reflect the last serving size used to add a food
-- [x] 2. Allow users to save as any unit and be able to use saved food and measure it in any other unit.
+- [x] 1. Add a "Plan" button on the nutrition page alongside the add food and dropdwon of the my food library
+- [x] 2. During plan mode, allow users to add foods as normal, but display in a different color on the totals and treat this state as temporary.
+- [x] 3. In plan mode, the "Daily Progress" container is outlined in light blue with a "Planning" in light blue in front of the "Daily Progress" string
+- [x] 4. The planned foods are also added to the daily log in light blue outlines, normal text otherwise
+- [x] 5. When exiting plan mode, user has option to discard or log everything planned
 
 ## Notes
-
-- For convenience, we should save or detect the most recently used unit so that someone who measures in grams doesnt have to change it from oz to g every time they add a food item

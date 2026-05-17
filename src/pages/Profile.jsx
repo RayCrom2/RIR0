@@ -298,10 +298,22 @@ export default function Profile() {
   async function handleSave(e) {
     e.preventDefault();
     setSaving(true);
+    let nextWeighInDate = goals.next_weigh_in_date ?? null;
+    if (goals.weigh_in_frequency !== savedSnapshot.current.goals.weigh_in_frequency) {
+      const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === goals.weigh_in_frequency)?.days ?? 7;
+      if (latestWeighInDate) {
+        const d = new Date(latestWeighInDate + "T00:00:00");
+        d.setDate(d.getDate() + freqDays);
+        nextWeighInDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      } else {
+        nextWeighInDate = null;
+      }
+    }
     await supabase.from("nutrition_goals").upsert(
       {
         user_id: user.id,
         ...goals,
+        next_weigh_in_date: nextWeighInDate,
         age: computedAge || goals.age,
         fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
         preferred_weight_unit: weightUnit,
@@ -309,9 +321,10 @@ export default function Profile() {
       },
       { onConflict: "user_id" },
     );
+    setGoals(g => ({ ...g, next_weigh_in_date: nextWeighInDate }));
     setSaving(false);
     setSaved(true);
-    savedSnapshot.current = { goals: { ...goals }, weightUnit, heightUnit };
+    savedSnapshot.current = { goals: { ...goals, next_weigh_in_date: nextWeighInDate }, weightUnit, heightUnit };
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -344,12 +357,28 @@ export default function Profile() {
       const d = new Date();
       dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
-    await supabase
-      .from("weight_logs")
-      .upsert(
-        { user_id: user.id, date: dateStr, weight_kg: kg },
-        { onConflict: "user_id,date" },
+    const ops = [
+      supabase
+        .from("weight_logs")
+        .upsert(
+          { user_id: user.id, date: dateStr, weight_kg: kg },
+          { onConflict: "user_id,date" },
+        ),
+    ];
+    if (!isReWeigh) {
+      const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === (goals.weigh_in_frequency || "weekly"))?.days ?? 7;
+      const d = new Date(dateStr + "T00:00:00");
+      d.setDate(d.getDate() + freqDays);
+      const nextDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      ops.push(
+        supabase.from("nutrition_goals").upsert(
+          { user_id: user.id, next_weigh_in_date: nextDate },
+          { onConflict: "user_id" },
+        )
       );
+      setGoals(g => ({ ...g, next_weigh_in_date: nextDate }));
+    }
+    await Promise.all(ops);
     setGStr("weight_kg", kg);
     setLbsVal(String(kgToLbs(kg)));
     setWeightLogs((prev) => {
@@ -399,17 +428,7 @@ export default function Profile() {
       : goals.weight_kg || null;
   const latestWeighInDate =
     weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].date : null;
-  const freqDays =
-    WEIGH_FREQ_OPTIONS.find(
-      (f) => f.value === (goals.weigh_in_frequency || "weekly"),
-    )?.days ?? 7;
-  const daysSinceLast = latestWeighInDate
-    ? Math.floor(
-        (new Date(todayDateStr) - new Date(latestWeighInDate + "T00:00:00")) /
-          86400000,
-      )
-    : Infinity;
-  const shouldShowWeighIn = daysSinceLast >= freqDays;
+  const shouldShowWeighIn = !goals.next_weigh_in_date || todayDateStr >= goals.next_weigh_in_date;
 
   // Compute TDEE for display in suggestion card
   const computedAge = getAge(goals.birth_date) ?? Number(goals.age);
