@@ -1497,7 +1497,7 @@ export default function Nutrition() {
               entry.
             </p>
           ) : (
-            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto" }}>
+            <>
               <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0 }}>
                 <input
                   type="text"
@@ -1524,6 +1524,7 @@ export default function Nutrition() {
                   <option value="sugar">Highest Sugar</option>
                 </select>
               </div>
+            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto" }}>
               {filteredSortedFoods.length === 0 && (
                 <p style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "12px 0", margin: 0 }}>
                   No foods match your search.
@@ -1739,6 +1740,7 @@ export default function Nutrition() {
                 );
               })}
             </div>
+            </>
           )}
         </div>
         )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PwaSheet } from "../App";
@@ -161,10 +161,13 @@ export default function Profile() {
   const [lbsVal, setLbsVal] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const savedSnapshot = useRef(null);
   const [loading, setLoading] = useState(true);
   const [weighInOpen, setWeighInOpen] = useState(false);
   const [weighInValue, setWeighInValue] = useState("");
   const [isReWeigh, setIsReWeigh] = useState(false);
+  const [goalWeightEditing, setGoalWeightEditing] = useState(false);
+  const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [pwaSheetOpen, setPwaSheetOpen] = useState(false);
   const showPwaCard = !isPwaStandalone() && window.matchMedia("(max-width: 767px)").matches;
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
@@ -196,14 +199,16 @@ export default function Profile() {
           MACRO_FIELDS.forEach((f) => {
             if (data[f.minKey] != null) enabled[f.key] = true;
           });
-          setRangeEnabled(enabled);
-          setHeightUnit(data.preferred_height_unit || "cm");
-          setWeightUnit(data.preferred_weight_unit || "kg");
+          const wUnit = data.preferred_weight_unit || "kg";
+          const hUnit = data.preferred_height_unit || "cm";
+          setHeightUnit(hUnit);
+          setWeightUnit(wUnit);
           if (data.height_cm) {
             const c = cmToFtIn(data.height_cm);
             setFtIn({ ft: String(c.ft), in: String(c.in) });
           }
           if (data.weight_kg) setLbsVal(String(kgToLbs(data.weight_kg)));
+          savedSnapshot.current = { goals: merged, weightUnit: wUnit, heightUnit: hUnit };
         }
         setLoading(false);
       });
@@ -289,6 +294,7 @@ export default function Profile() {
     );
     setSaving(false);
     setSaved(true);
+    savedSnapshot.current = { goals: { ...goals }, weightUnit, heightUnit };
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -363,6 +369,11 @@ export default function Profile() {
     ["gain_muscle", "gain_weight"].includes(g),
   );
 
+  const hasChanges = !savedSnapshot.current ||
+    JSON.stringify(goals) !== JSON.stringify(savedSnapshot.current.goals) ||
+    weightUnit !== savedSnapshot.current.weightUnit ||
+    heightUnit !== savedSnapshot.current.heightUnit;
+
   const _d = new Date();
   const todayDateStr = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
   const latestWeightKg =
@@ -402,125 +413,40 @@ export default function Profile() {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px 40px" }}>
+    <div className="profile-page">
       <p className="font-bold text-[2rem] mb-1">Profile</p>
-
-      {/* User card */}
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          padding: "24px 20px",
-          marginBottom: 24,
-          boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt="avatar"
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              objectFit: "cover",
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              background: "#ff8c42",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 22,
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {initial}
-          </div>
-        )}
-        <div style={{ minWidth: 0, flex: 1 }}>
-          {displayName && displayName !== user.email && (
-            <p
-              style={{
-                margin: "0 0 2px",
-                fontWeight: 700,
-                fontSize: 16,
-                color: "#333",
-              }}
-            >
-              {displayName}
-            </p>
-          )}
-          <p
-            style={{
-              margin: 0,
-              fontSize: 14,
-              color: "#888",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {user.email}
-          </p>
-        </div>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          style={{
-            background: "none",
-            border: "1px solid #e0e0e0",
-            borderRadius: 6,
-            padding: "6px 14px",
-            cursor: "pointer",
-            fontSize: 13,
-            color: "#555",
-            flexShrink: 0,
-          }}
-        >
-          Sign Out
-        </button>
-      </div>
 
       {loading ? (
         <p style={{ color: "#bbb", fontSize: 14, textAlign: "center" }}>
           Loading…
         </p>
       ) : (
-        <form
-          onSubmit={handleSave}
-          style={{ display: "flex", flexDirection: "column", gap: 20 }}
-        >
+        <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column" }}>
+          <div className="profile-cols">
+            {/* ── Column 1: user card + About You + Weight Progress ── */}
+            <div className="profile-col">
+              {/* User card */}
+              <div style={{ background: "#fff", borderRadius: 12, padding: "24px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 16 }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ff8c42", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>
+                    {initial}
+                  </div>
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  {displayName && displayName !== user.email && (
+                    <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>{displayName}</p>
+                  )}
+                  <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</p>
+                </div>
+                <button type="button" onClick={() => supabase.auth.signOut()} style={{ background: "none", border: "1px solid #e0e0e0", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#555", flexShrink: 0 }}>
+                  Sign Out
+                </button>
+              </div>
           {/* ── About You ── */}
           <Section title="About You">
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <FieldRow label="Gender">
-                <div style={{ display: "flex", gap: 8 }}>
-                  {["male", "female", "other"].map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGStr("gender", g)}
-                      style={{
-                        ...chipBtn,
-                        background: goals.gender === g ? "#ff8c42" : "#f7f7fb",
-                        color: goals.gender === g ? "#fff" : "#555",
-                      }}
-                    >
-                      {g.charAt(0).toUpperCase() + g.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </FieldRow>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span
@@ -715,22 +641,6 @@ export default function Profile() {
                     Weigh in
                   </button>
                 )}
-                <div style={{ display: "flex", gap: 4 }}>
-                  {["kg", "lbs"].map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => toggleWeightUnit(u)}
-                      style={{
-                        ...unitToggle,
-                        background: weightUnit === u ? "#ff8c42" : "#f0f0f0",
-                        color: weightUnit === u ? "#fff" : "#888",
-                      }}
-                    >
-                      {u}
-                    </button>
-                  ))}
-                </div>
                 {latestWeightKg ? (
                   <button
                     type="button"
@@ -817,60 +727,89 @@ export default function Profile() {
               </div>
               {(isLoss || isGain) && (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "#333",
-                    }}
-                  >
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>
                     Goal weight
                   </span>
-                  {weightUnit === "kg" ? (
-                    <input
-                      type="number"
-                      min="30"
-                      max="300"
-                      step="0.1"
-                      value={goals.target_weight_kg ?? ""}
-                      onChange={(e) =>
-                        setGStr(
-                          "target_weight_kg",
-                          e.target.value === "" ? "" : Number(e.target.value),
-                        )
-                      }
-                      onFocus={(e) => e.target.select()}
-                      style={{ ...numInput, padding: "7px 6px" }}
-                    />
+                  {goalWeightEditing ? (
+                    <>
+                      {weightUnit === "kg" ? (
+                        <input
+                          type="number"
+                          min="30"
+                          max="300"
+                          step="0.1"
+                          value={goals.target_weight_kg ?? ""}
+                          onChange={(e) => setGStr("target_weight_kg", e.target.value === "" ? "" : Number(e.target.value))}
+                          onFocus={(e) => e.target.select()}
+                          autoFocus
+                          style={{ ...numInput, padding: "7px 6px" }}
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          min="66"
+                          max="660"
+                          value={goals.target_weight_kg ? Math.round(Number(goals.target_weight_kg) * 2.20462) : ""}
+                          onChange={(e) => setGStr("target_weight_kg", e.target.value === "" ? "" : lbsToKg(e.target.value))}
+                          onFocus={(e) => e.target.select()}
+                          autoFocus
+                          style={{ ...numInput, padding: "7px 6px" }}
+                        />
+                      )}
+                      <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
+                      <button type="button" onClick={() => setGoalWeightEditing(false)}
+                        style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}>
+                        Done
+                      </button>
+                    </>
                   ) : (
-                    <input
-                      type="number"
-                      min="66"
-                      max="660"
-                      value={
-                        goals.target_weight_kg
-                          ? Math.round(Number(goals.target_weight_kg) * 2.20462)
-                          : ""
-                      }
-                      onChange={(e) =>
-                        setGStr(
-                          "target_weight_kg",
-                          e.target.value === "" ? "" : lbsToKg(e.target.value),
-                        )
-                      }
-                      onFocus={(e) => e.target.select()}
-                      style={{ ...numInput, padding: "7px 6px" }}
-                    />
+                    <>
+                      <span style={{ fontSize: 14, color: goals.target_weight_kg ? "#555" : "#ccc" }}>
+                        {goals.target_weight_kg
+                          ? `${dispWeight(Number(goals.target_weight_kg), weightUnit, goals.weight_decimal_places || 1)} ${weightUnit}`
+                          : "—"}
+                      </span>
+                      <button type="button" onClick={() => setGoalWeightEditing(true)}
+                        style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}>
+                        Edit
+                      </button>
+                    </>
                   )}
-                  <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>
-                    {weightUnit}
-                  </span>
                 </div>
               )}
             </div>
           </Section>
 
+          {/* ── Weight Progress ── */}
+          {weightLogs.length > 0 && (
+            <Section
+              title="Weight Progress"
+              action={
+                <button
+                  type="button"
+                  onClick={() => setGraphModalOpen(true)}
+                  title="Expand graph"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}
+                >
+                  ⤢
+                </button>
+              }
+            >
+              <WeightGraph
+                logs={weightLogs}
+                startKg={Number(goals.starting_weight_kg) || null}
+                targetKg={Number(goals.target_weight_kg) || null}
+                unit={weightUnit}
+                isLoss={isLoss}
+                isGain={isGain}
+                decimalPlaces={goals.weight_decimal_places || 1}
+              />
+            </Section>
+          )}
+            </div>
+
+            {/* ── Column 2: Fitness Profile ── */}
+            <div className="profile-col">
           {/* ── Fitness Profile ── */}
           <Section title="Fitness Profile">
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -995,22 +934,10 @@ export default function Profile() {
               </div>
             </div>
           </Section>
+            </div>
 
-          {/* ── Weight Progress ── */}
-          {weightLogs.length > 0 && (
-            <Section title="Weight Progress">
-              <WeightGraph
-                logs={weightLogs}
-                startKg={Number(goals.starting_weight_kg) || null}
-                targetKg={Number(goals.target_weight_kg) || null}
-                unit={weightUnit}
-                isLoss={isLoss}
-                isGain={isGain}
-                decimalPlaces={goals.weight_decimal_places || 1}
-              />
-            </Section>
-          )}
-
+            {/* ── Column 3: Daily Nutrition Goals ── */}
+            <div className="profile-col">
           {/* ── Daily Nutrition Goals ── */}
           <Section
             title="Daily Nutrition Goals"
@@ -1293,27 +1220,60 @@ export default function Profile() {
               ))}
             </div>
           </Section>
+            </div>
+          </div>
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !hasChanges}
             style={{
               width: "100%",
               padding: "11px 0",
-              background: saved ? "#5cb85c" : "#ff8c42",
-              color: "#fff",
+              background: saved ? "#5cb85c" : hasChanges ? "#ff8c42" : "#e0e0e0",
+              color: hasChanges ? "#fff" : "#aaa",
               border: "none",
               borderRadius: 10,
               fontWeight: 700,
               fontSize: 14,
-              cursor: saving ? "default" : "pointer",
-              opacity: saving ? 0.7 : 1,
+              cursor: saving || !hasChanges ? "default" : "pointer",
               transition: "background 0.2s",
             }}
           >
             {saving ? "Saving…" : saved ? "Saved!" : "Save Profile & Goals"}
           </button>
         </form>
+      )}
+
+      {graphModalOpen && (
+        <div
+          onClick={() => setGraphModalOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 800, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 760, boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>Weight Progress</h3>
+              <button
+                type="button"
+                onClick={() => setGraphModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 20, lineHeight: 1, padding: "2px 4px" }}
+              >
+                ✕
+              </button>
+            </div>
+            <WeightGraph
+              logs={weightLogs}
+              startKg={Number(goals.starting_weight_kg) || null}
+              targetKg={Number(goals.target_weight_kg) || null}
+              unit={weightUnit}
+              isLoss={isLoss}
+              isGain={isGain}
+              decimalPlaces={goals.weight_decimal_places || 1}
+            />
+          </div>
+        </div>
       )}
 
       {showPwaCard && (
@@ -1442,9 +1402,22 @@ export default function Profile() {
                     textAlign: "left",
                   }}
                 />
-                <span style={{ fontSize: 14, color: "#888", fontWeight: 600 }}>
-                  {weightUnit}
-                </span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {["kg", "lbs"].map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => toggleWeightUnit(u)}
+                      style={{
+                        ...unitToggle,
+                        background: weightUnit === u ? "#ff8c42" : "#f0f0f0",
+                        color: weightUnit === u ? "#fff" : "#888",
+                      }}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
               </div>
               <button
                 type="submit"
@@ -1710,18 +1683,18 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPla
           const cy = yOf(log.weight_kg);
           const dateLabel = new Date(log.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
           const weightLabel = `${toDisp(log.weight_kg)} ${unitLabel}`;
-          const tipW = 72, tipH = 30, tipR = 5;
+          const tipW = 96, tipH = 40, tipR = 7;
           let tipX = cx - tipW / 2;
           if (tipX < pL) tipX = pL;
           if (tipX + tipW > W - pR) tipX = W - pR - tipW;
-          const tipY = cy - tipH - 10 < pT ? cy + 12 : cy - tipH - 10;
+          const tipY = cy - tipH - 12 < pT ? cy + 14 : cy - tipH - 12;
           return (
             <g pointerEvents="none">
               <line x1={cx} y1={pT} x2={cx} y2={H - pB} stroke="#bbb" strokeWidth="1" strokeDasharray="4 3" />
-              <circle cx={cx} cy={cy} r="5" fill="#ff8c42" stroke="#fff" strokeWidth="2" />
-              <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={tipR} ry={tipR} fill="rgba(50,50,50,0.85)" />
-              <text x={tipX + tipW / 2} y={tipY + 11} textAnchor="middle" fontSize="9" fill="#fff" fontWeight="600">{weightLabel}</text>
-              <text x={tipX + tipW / 2} y={tipY + 23} textAnchor="middle" fontSize="8" fill="#ccc">{dateLabel}</text>
+              <circle cx={cx} cy={cy} r="6" fill="#ff8c42" stroke="#fff" strokeWidth="2.5" />
+              <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={tipR} ry={tipR} fill="rgba(40,40,40,0.9)" />
+              <text x={tipX + tipW / 2} y={tipY + 15} textAnchor="middle" fontSize="12" fill="#fff" fontWeight="700">{weightLabel}</text>
+              <text x={tipX + tipW / 2} y={tipY + 30} textAnchor="middle" fontSize="10" fill="#ccc">{dateLabel}</text>
             </g>
           );
         })()}
@@ -1772,7 +1745,7 @@ function LegendItem({ color, label, solid }) {
   );
 }
 
-function Section({ title, subtitle, children }) {
+function Section({ title, subtitle, action, children }) {
   return (
     <div
       style={{
@@ -1782,9 +1755,10 @@ function Section({ title, subtitle, children }) {
         boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
       }}
     >
-      <h3 style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700 }}>
-        {title}
-      </h3>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, flex: 1 }}>{title}</h3>
+        {action}
+      </div>
       {subtitle && (
         <p style={{ margin: "0 0 14px", fontSize: 12, color: "#888" }}>
           {subtitle}
