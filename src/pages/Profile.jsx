@@ -440,71 +440,37 @@ export default function Profile() {
       ) : (
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column" }}>
           <div className="profile-cols">
-            {/* ── Column 1: user card + About You + Weight Progress ── */}
+            {/* ── Column 1: About You + Weight Progress ── */}
             <div className="profile-col">
-              {/* User card */}
-              <div style={{ background: "#fff", borderRadius: 12, padding: "24px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 16 }}>
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="avatar" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ff8c42", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, flexShrink: 0 }}>
-                    {initial}
-                  </div>
-                )}
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  {displayName && displayName !== user.email && (
-                    <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 16, color: "#333" }}>{displayName}</p>
-                  )}
-                  <p style={{ margin: 0, fontSize: 14, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</p>
-                </div>
-                <button type="button" onClick={() => supabase.auth.signOut()} style={{ background: "none", border: "1px solid #e0e0e0", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#555", flexShrink: 0 }}>
-                  Sign Out
-                </button>
-              </div>
           {/* ── About You ── */}
           <Section title="About You">
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "#333",
-                    }}
-                  >
-                    Date of Birth
-                  </span>
-                  {goals.birth_date ? (
-                    <span style={{ fontSize: 14, color: "#555" }}>
-                      {new Date(
-                        goals.birth_date + "T00:00:00",
-                      ).toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </span>
-                  ) : (
-                    <BirthDateInput
-                      value={goals.birth_date ?? ""}
-                      onChange={(v) => setGStr("birth_date", v)}
-                      style={{ ...numInput, width: "auto", textAlign: "left" }}
-                    />
+              {/* Identity header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, paddingBottom: 10, borderBottom: "1px solid #f0f0f0" }}>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#ff8c42", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, fontWeight: 700, flexShrink: 0 }}>
+                    {initial}
+                  </div>
+                )}
+                <div style={{ minWidth: 0 }}>
+                  {displayName && displayName !== user.email && (
+                    <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 15, color: "#333" }}>{displayName}</p>
                   )}
+                  <p style={{ margin: 0, fontSize: 13, color: "#888", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</p>
                 </div>
-                {goals.birth_date && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "#aaa",
-                      margin: 0,
-                      textAlign: "right",
-                    }}
-                  >
-                    Age: {getAge(goals.birth_date)} years
-                  </p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Age</span>
+                {goals.birth_date ? (
+                  <span style={{ fontSize: 14, color: "#555" }}>{getAge(goals.birth_date)}</span>
+                ) : (
+                  <BirthDateInput
+                    value={goals.birth_date ?? ""}
+                    onChange={(v) => setGStr("birth_date", v)}
+                    style={{ ...numInput, width: "auto", textAlign: "left" }}
+                  />
                 )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -707,23 +673,23 @@ export default function Profile() {
               {unitPrefsOpen && (
                 <div style={{ background: "#f7f7fb", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Weight unit</span>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {["kg", "lbs"].map((u) => (
-                        <button key={u} type="button" onClick={() => toggleWeightUnit(u)}
-                          style={{ ...unitToggle, background: weightUnit === u ? "#ff8c42" : "#e8e8e8", color: weightUnit === u ? "#fff" : "#888" }}>
-                          {u}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Height unit</span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {["cm", "ftin"].map((u) => (
                         <button key={u} type="button" onClick={() => toggleHeightUnit(u)}
                           style={{ ...unitToggle, background: heightUnit === u ? "#ff8c42" : "#e8e8e8", color: heightUnit === u ? "#fff" : "#888" }}>
                           {u === "ftin" ? "ft/in" : "cm"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#555", flex: 1 }}>Weight unit</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {["kg", "lbs"].map((u) => (
+                        <button key={u} type="button" onClick={() => toggleWeightUnit(u)}
+                          style={{ ...unitToggle, background: weightUnit === u ? "#ff8c42" : "#e8e8e8", color: weightUnit === u ? "#fff" : "#888" }}>
+                          {u}
                         </button>
                       ))}
                     </div>
@@ -1255,7 +1221,7 @@ export default function Profile() {
               width: "100%",
               padding: "11px 0",
               background: saved ? "#5cb85c" : hasChanges ? "#ff8c42" : "#e0e0e0",
-              color: hasChanges ? "#fff" : "#aaa",
+              color: saved || hasChanges ? "#fff" : "#aaa",
               border: "none",
               borderRadius: 10,
               fontWeight: 700,
