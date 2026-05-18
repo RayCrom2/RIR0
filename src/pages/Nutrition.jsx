@@ -35,7 +35,7 @@ function clearGuestEntries() {
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
 const UNIT_TO_G  = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
-const UNIT_TO_ML = { ml: 1, l: 1000 };
+const UNIT_TO_ML = { ml: 1, "fl oz": 29.5735, l: 1000 };
 const unitFactor = (u) => UNIT_TO_G[u] ?? UNIT_TO_ML[u] ?? null;
 const LAST_UNIT_KEY = "rir0_last_serving_unit";
 const getLastUnit = () => localStorage.getItem(LAST_UNIT_KEY) || "g";
@@ -410,11 +410,25 @@ export default function Nutrition() {
         const match = pairs.find(([, num]) => qty > 0 && Math.abs(Number(num) - qty) < 0.5);
         return (match ? match[2] : pairs[0]?.[2] || "g").toLowerCase();
       })();
+      let displaySize = qty > 0 ? qty : 100;
+      let displayUnit = qty > 0 ? servingUnit : "g";
+      // Open Food Facts often converts fl oz → g (1 fl oz = 28.3495g).
+      // Detect that by checking if the gram value is within 2% of a whole fl oz count,
+      // and snap back so beverages show a clean unit instead of e.g. "340.194 g".
+      if (displayUnit === "g" && displaySize > 0) {
+        const flOzEquiv = displaySize / 28.3495;
+        if (flOzEquiv >= 0.5 && Math.abs(flOzEquiv - Math.round(flOzEquiv)) < 0.02) {
+          displaySize = Math.round(flOzEquiv);
+          displayUnit = "fl oz";
+        } else {
+          displaySize = Math.round(displaySize * 10) / 10;
+        }
+      }
       const food = {
         description: p.product_name || p.abbreviated_product_name || "Unknown product",
         brandOwner: p.brands || null,
-        servingSize: qty > 0 ? qty : 100,
-        servingSizeUnit: qty > 0 ? servingUnit : "g",
+        servingSize: displaySize,
+        servingSizeUnit: displayUnit,
         foodNutrients: [
           { nutrientNumber: "208", value: n[`energy-kcal${suffix}`] ?? n["energy-kcal_100g"] ?? 0 },
           { nutrientNumber: "203", value: n[`proteins${suffix}`] ?? n["proteins_100g"] ?? 0 },
