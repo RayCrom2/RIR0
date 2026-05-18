@@ -34,7 +34,9 @@ function clearGuestEntries() {
 }
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
-const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
+const UNIT_TO_G  = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
+const UNIT_TO_ML = { ml: 1, l: 1000 };
+const unitFactor = (u) => UNIT_TO_G[u] ?? UNIT_TO_ML[u] ?? null;
 const LAST_UNIT_KEY = "rir0_last_serving_unit";
 const getLastUnit = () => localStorage.getItem(LAST_UNIT_KEY) || "g";
 
@@ -214,9 +216,9 @@ export default function Nutrition() {
   const usdaScale = (() => {
     if (!selectedUsdaFood) return 1;
     if (!selectedUsdaFood.servingSize) return Number(servingInput) || 1;
-    if (isFromBarcode && UNIT_TO_G[barcodeUnit]) {
-      const origG = UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ?? 1;
-      return (Number(servingInput) || 0) * UNIT_TO_G[barcodeUnit] / (selectedUsdaFood.servingSize * origG);
+    if (isFromBarcode && unitFactor(barcodeUnit) != null) {
+      const origFactor = unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ?? 1;
+      return (Number(servingInput) || 0) * unitFactor(barcodeUnit) / (selectedUsdaFood.servingSize * origFactor);
     }
     return (Number(servingInput) || 0) / selectedUsdaFood.servingSize;
   })();
@@ -426,7 +428,7 @@ export default function Nutrition() {
       setSelectedUsdaFood(food);
       setServingInput(String(food.servingSize));
       setIsFromBarcode(true);
-      setBarcodeUnit(UNIT_TO_G[origUnit] ? origUnit : "g");
+      setBarcodeUnit(unitFactor(origUnit) != null ? origUnit : "g");
     } catch {
       showToast("Failed to look up product", "#e05c5c");
     }
@@ -460,9 +462,9 @@ export default function Nutrition() {
   function handleAddFromUsda() {
     if (!selectedUsdaFood) return;
     let scale, unit;
-    if (isFromBarcode && UNIT_TO_G[barcodeUnit] && selectedUsdaFood.servingSize) {
-      const origG = UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ?? 1;
-      scale = (Number(servingInput) || 0) * UNIT_TO_G[barcodeUnit] / (selectedUsdaFood.servingSize * origG);
+    if (isFromBarcode && unitFactor(barcodeUnit) != null && selectedUsdaFood.servingSize) {
+      const origFactor = unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ?? 1;
+      scale = (Number(servingInput) || 0) * unitFactor(barcodeUnit) / (selectedUsdaFood.servingSize * origFactor);
       unit = barcodeUnit;
     } else {
       scale = selectedUsdaFood.servingSize
@@ -1441,13 +1443,16 @@ export default function Nutrition() {
                     onChange={(e) => setServingInput(e.target.value)}
                     style={{ width: 70, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", borderRight: "none", fontSize: 16, outline: "none", background: "#fff" }}
                   />
-                  {isFromBarcode && UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ? (
+                  {isFromBarcode && unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) != null ? (
                     <select
                       value={barcodeUnit}
                       onChange={(e) => setBarcodeUnit(e.target.value)}
                       style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#555", background: "#fafafa", cursor: "pointer", appearance: "none", minWidth: 42 }}
                     >
-                      {Object.keys(UNIT_TO_G).map((u) => <option key={u} value={u}>{u}</option>)}
+                      {(UNIT_TO_ML[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()]
+                        ? Object.keys(UNIT_TO_ML)
+                        : Object.keys(UNIT_TO_G)
+                      ).map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
                   ) : (
                     <span style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
