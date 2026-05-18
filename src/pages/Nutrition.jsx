@@ -185,6 +185,8 @@ export default function Nutrition() {
   const [servingInput, setServingInput] = useState("");
   const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [isFromBarcode, setIsFromBarcode] = useState(false);
+  const [barcodeUnit, setBarcodeUnit] = useState("g");
   const [logEntryMenu, setLogEntryMenu] = useState(null);
   const [planMode, setPlanMode] = useState(false);
   const [plannedEntries, setPlannedEntries] = useState([]);
@@ -209,11 +211,15 @@ export default function Nutrition() {
 
   const visibleMacroList = MACROS.filter((m) => visibleMacros.has(m.key));
 
-  const usdaScale = selectedUsdaFood
-    ? selectedUsdaFood.servingSize
-      ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
-      : (Number(servingInput) || 1)
-    : 1;
+  const usdaScale = (() => {
+    if (!selectedUsdaFood) return 1;
+    if (!selectedUsdaFood.servingSize) return Number(servingInput) || 1;
+    if (isFromBarcode && UNIT_TO_G[barcodeUnit]) {
+      const origG = UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ?? 1;
+      return (Number(servingInput) || 0) * UNIT_TO_G[barcodeUnit] / (selectedUsdaFood.servingSize * origG);
+    }
+    return (Number(servingInput) || 0) / selectedUsdaFood.servingSize;
+  })();
 
   const filteredSortedFoods = (() => {
     const q = myFoodsSearch.trim().toLowerCase();
@@ -416,8 +422,11 @@ export default function Nutrition() {
           { nutrientNumber: "269", value: n[`sugars${suffix}`] ?? n["sugars_100g"] ?? 0 },
         ],
       };
+      const origUnit = food.servingSizeUnit.toLowerCase();
       setSelectedUsdaFood(food);
       setServingInput(String(food.servingSize));
+      setIsFromBarcode(true);
+      setBarcodeUnit(UNIT_TO_G[origUnit] ? origUnit : "g");
     } catch {
       showToast("Failed to look up product", "#e05c5c");
     }
@@ -442,6 +451,7 @@ export default function Nutrition() {
   function applyUSDAFood(food) {
     setSelectedUsdaFood(food);
     setServingInput(food.servingSize ? String(food.servingSize) : "1");
+    setIsFromBarcode(false);
     setUsdaOpen(false);
     setUsdaResults([]);
     setHoveredFood(null);
@@ -449,15 +459,22 @@ export default function Nutrition() {
 
   function handleAddFromUsda() {
     if (!selectedUsdaFood) return;
-    const scale = selectedUsdaFood.servingSize
-      ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
-      : (Number(servingInput) || 1);
+    let scale, unit;
+    if (isFromBarcode && UNIT_TO_G[barcodeUnit] && selectedUsdaFood.servingSize) {
+      const origG = UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ?? 1;
+      scale = (Number(servingInput) || 0) * UNIT_TO_G[barcodeUnit] / (selectedUsdaFood.servingSize * origG);
+      unit = barcodeUnit;
+    } else {
+      scale = selectedUsdaFood.servingSize
+        ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
+        : (Number(servingInput) || 1);
+      const rawUnit = (selectedUsdaFood.servingSizeUnit || "G").toUpperCase();
+      unit = USDA_UNIT_MAP[rawUnit] || "g";
+    }
     const get = (num) => {
       const n = selectedUsdaFood.foodNutrients?.find((n) => n.nutrientNumber === num);
       return n ? Math.round(n.value * scale * 10) / 10 : 0;
     };
-    const rawUnit = (selectedUsdaFood.servingSizeUnit || "G").toUpperCase();
-    const unit = USDA_UNIT_MAP[rawUnit] || "g";
 
     if (!user) {
       const now = new Date();
@@ -1424,9 +1441,19 @@ export default function Nutrition() {
                     onChange={(e) => setServingInput(e.target.value)}
                     style={{ width: 70, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", borderRight: "none", fontSize: 16, outline: "none", background: "#fff" }}
                   />
-                  <span style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
-                    {(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()}
-                  </span>
+                  {isFromBarcode && UNIT_TO_G[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()] ? (
+                    <select
+                      value={barcodeUnit}
+                      onChange={(e) => setBarcodeUnit(e.target.value)}
+                      style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#555", background: "#fafafa", cursor: "pointer", appearance: "none", minWidth: 42 }}
+                    >
+                      {Object.keys(UNIT_TO_G).map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  ) : (
+                    <span style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
+                      {(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <div style={{ display: "flex" }}>
