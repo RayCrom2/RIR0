@@ -590,25 +590,23 @@ export default function Profile() {
                 >
                   Weight
                 </span>
-                {shouldShowWeighIn && (
-                  <button
-                    type="button"
-                    onClick={openWeighIn}
-                    style={{
-                      fontSize: 12,
-                      color: "#ff8c42",
-                      background: "#fff5ee",
-                      border: "1px solid #ff8c42",
-                      borderRadius: 7,
-                      padding: "5px 10px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Weigh in
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={openWeighIn}
+                  style={{
+                    fontSize: 12,
+                    color: "#ff8c42",
+                    background: "#fff5ee",
+                    border: "1px solid #ff8c42",
+                    borderRadius: 7,
+                    padding: "5px 10px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Weigh in
+                </button>
                 {latestWeightKg ? (
                   <button
                     type="button"
@@ -1362,31 +1360,34 @@ export default function Profile() {
                 ✕
               </button>
             </div>
-            {isReWeigh && latestWeighInDate ? (
-              <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 16px" }}>
-                Editing entry from{" "}
-                {new Date(latestWeighInDate + "T00:00:00").toLocaleDateString(
-                  "en-US",
-                  { month: "short", day: "numeric", year: "numeric" },
-                )}
-              </p>
-            ) : (
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "#777",
-                  lineHeight: 1.65,
-                  margin: "0 0 20px",
-                  background: "#f7f7fb",
-                  borderRadius: 9,
-                  padding: "12px 14px",
-                }}
-              >
-                For the most consistent results, weigh yourself in the morning
-                after using the bathroom, wearing the same amount of clothing
-                (or none), and before eating or drinking.
-              </p>
-            )}
+            {(() => {
+              const todayLog = weightLogs.find(l => l.date === todayDateStr);
+              if (isReWeigh && latestWeighInDate) {
+                return (
+                  <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 16px" }}>
+                    Editing entry from{" "}
+                    {new Date(latestWeighInDate + "T00:00:00").toLocaleDateString(
+                      "en-US",
+                      { month: "short", day: "numeric", year: "numeric" },
+                    )}
+                  </p>
+                );
+              }
+              if (todayLog) {
+                return (
+                  <p style={{ fontSize: 13, color: "#f0a500", lineHeight: 1.55, margin: "0 0 16px", background: "#fffbf0", border: "1px solid #f7e0a0", borderRadius: 9, padding: "10px 14px" }}>
+                    You already logged <strong>{dispWeight(todayLog.weight_kg, weightUnit, goals.weight_decimal_places || 1)} {weightUnit}</strong> today — saving will replace it.
+                  </p>
+                );
+              }
+              return (
+                <p style={{ fontSize: 13, color: "#777", lineHeight: 1.65, margin: "0 0 20px", background: "#f7f7fb", borderRadius: 9, padding: "12px 14px" }}>
+                  For the most consistent results, weigh yourself in the morning
+                  after using the bathroom, wearing the same amount of clothing
+                  (or none), and before eating or drinking.
+                </p>
+              );
+            })()}
             <form onSubmit={handleWeighIn}>
               <div
                 style={{
