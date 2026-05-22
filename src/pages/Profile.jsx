@@ -679,6 +679,21 @@ export default function Profile() {
                   })}
                 </div>
               </div>
+              {goals.hide_weight_prompt && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 2 }}>
+                  <span style={{ fontSize: 12, color: "#aaa", flex: 1 }}>Weight reminders</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await supabase.from("nutrition_goals").upsert({ user_id: user.id, hide_weight_prompt: false }, { onConflict: "user_id" });
+                      setGoals(g => ({ ...g, hide_weight_prompt: false }));
+                    }}
+                    style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}
+                  >
+                    Re-enable
+                  </button>
+                </div>
+              )}
               <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 2 }}>
                 <span style={{ fontSize: 12, color: "#aaa", flex: 1 }}>Unit Preferences</span>
                 <button
