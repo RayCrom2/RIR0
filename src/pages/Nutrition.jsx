@@ -14,6 +14,7 @@ export const monthAbbr = new Date()
 
 const VISIBLE_KEY = "nutrition_visible_macros";
 const GUEST_LOG_KEY = "rir0_guest_logs";
+const GUEST_GOALS_KEY = "rir0_guest_goals";
 
 function loadGuestEntries() {
   try {
@@ -195,6 +196,8 @@ export default function Nutrition() {
   const [planExitOpen, setPlanExitOpen] = useState(false);
   const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [weightInput, setWeightInput] = useState("");
+  const [guestGoalsOpen, setGuestGoalsOpen] = useState(false);
+  const [guestGoalsForm, setGuestGoalsForm] = useState({});
   const WEIGHT_DISMISS_KEY = "rir0_weight_dismissed";
   const toastTimer = useRef(null);
   const menuRef = useRef(null);
@@ -207,6 +210,17 @@ export default function Nutrition() {
     clearTimeout(toastTimer.current);
     setToast({ visible: true, color, message });
     toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2500);
+  }
+
+  function openGuestGoals() {
+    setGuestGoalsForm({ ...goals });
+    setGuestGoalsOpen(true);
+  }
+  function saveGuestGoals() {
+    const updated = { ...DEFAULT_GOALS, ...guestGoalsForm };
+    localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify(guestGoalsForm));
+    setGoals(updated);
+    setGuestGoalsOpen(false);
   }
   const usdaDebounce = useRef(null);
   const containerRef = useRef(null);
@@ -333,9 +347,17 @@ export default function Nutrition() {
     return () => { document.body.style.overflow = ""; };
   }, [planExitOpen]);
 
-  // ── load nutrition goals from DB
+  // ── load nutrition goals from DB (or localStorage for guests)
   useEffect(() => {
-    if (!user) { setGoals(DEFAULT_GOALS); return; }
+    if (!user) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(GUEST_GOALS_KEY));
+        setGoals(saved ? { ...DEFAULT_GOALS, ...saved } : DEFAULT_GOALS);
+      } catch {
+        setGoals(DEFAULT_GOALS);
+      }
+      return;
+    }
     supabase
       .from("nutrition_goals")
       .select("*")
@@ -997,18 +1019,28 @@ export default function Nutrition() {
             marginBottom: 14,
           }}
         >
-          <span
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#888",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            {planMode && <span style={{ color: "#4f8ef7", marginRight: 6 }}>Planning ·</span>}
-            Daily Progress
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#888",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              {planMode && <span style={{ color: "#4f8ef7", marginRight: 6 }}>Planning ·</span>}
+              Daily Progress
+            </span>
+            {!user && (
+              <button
+                onClick={openGuestGoals}
+                style={{ fontSize: 11, color: "#888", background: "#f0f0f0", border: "none", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}
+              >
+                Set goals
+              </button>
+            )}
+          </div>
           <div ref={menuRef} style={{ position: "relative" }}>
             <button
               onClick={() => setMenuOpen((o) => !o)}
@@ -2555,6 +2587,59 @@ export default function Nutrition() {
           userId={user?.id}
           onClose={() => setCalendarOpen(false)}
         />
+      )}
+
+      {/* Guest macro goals modal */}
+      {guestGoalsOpen && (
+        <div
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setGuestGoalsOpen(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 16, padding: "24px 20px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Daily Macro Goals</span>
+              <button onClick={() => setGuestGoalsOpen(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#aaa" }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>Sign in to sync goals across devices.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {MACROS.map(m => {
+                const dir = guestGoalsForm[m.dirKey] ?? m.defaultDir;
+                return (
+                  <div key={m.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>{m.label}</span>
+                    <div style={{ display: "flex", gap: 3 }}>
+                      {["above", "below"].map(d => (
+                        <button key={d} type="button"
+                          onClick={() => setGuestGoalsForm(f => ({ ...f, [m.dirKey]: d }))}
+                          style={{ border: "none", borderRadius: 6, padding: "3px 7px", fontSize: 11, cursor: "pointer", fontWeight: 600, background: dir === d ? "#555" : "#f0f0f0", color: dir === d ? "#fff" : "#aaa" }}>
+                          {d === "above" ? "≥" : "≤"}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={guestGoalsForm[m.key] ?? ""}
+                      onChange={e => setGuestGoalsForm(f => ({ ...f, [m.key]: e.target.value === "" ? null : Number(e.target.value) }))}
+                      style={{ padding: "7px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", textAlign: "right", background: "#fafafa", width: 80 }}
+                    />
+                    <span style={{ fontSize: 12, color: "#aaa", width: 28 }}>{m.unit}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={saveGuestGoals}
+              style={{ marginTop: 22, width: "100%", padding: "11px 0", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+            >
+              Save Goals
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Logged toast */}
