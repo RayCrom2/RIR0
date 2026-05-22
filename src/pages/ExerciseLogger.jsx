@@ -170,6 +170,7 @@ function ExerciseCard({
               step="1"
               placeholder="—"
               value={s.reps}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => !done && onUpdateSet(si, "reps", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
@@ -179,6 +180,7 @@ function ExerciseCard({
               step="0.5"
               placeholder="—"
               value={s.weight}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => !done && onUpdateSet(si, "weight", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
@@ -188,6 +190,7 @@ function ExerciseCard({
               max="10"
               placeholder="—"
               value={s.rir}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => !done && onUpdateSet(si, "rir", e.target.value)}
               className={`py-[7px] px-1.5 text-center border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] min-w-0${done ? " opacity-50" : ""}`}
             />
@@ -247,6 +250,9 @@ export default function ExerciseLogger() {
   const [workoutLogName, setWorkoutLogName] = useState("");
   const [saveAsRoutine, setSaveAsRoutine] = useState(false);
   const sSearchRef = useRef(null);
+
+  const [sessionRoutineId, setSessionRoutineId] = useState(null);
+  const [updateRoutineDefaults, setUpdateRoutineDefaults] = useState(false);
 
   const [inWorkout, setInWorkout] = useState(false);
   const [prefWeightUnit, setPrefWeightUnit] = useState("lbs");
@@ -314,10 +320,11 @@ export default function ExerciseLogger() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       try {
-        const { sessionName: sn, sessionSource: ss, sessionExs: se } = JSON.parse(raw);
+        const { sessionName: sn, sessionSource: ss, sessionRoutineId: sri, sessionExs: se } = JSON.parse(raw);
         if (!se?.length) { localStorage.removeItem(STORAGE_KEY); return; }
         setSessionName(sn ?? '');
         setSessionSource(ss ?? 'free');
+        setSessionRoutineId(sri ?? null);
         setSessionExs(se);
         setInWorkout(true);
         setView('session');
@@ -334,6 +341,7 @@ export default function ExerciseLogger() {
           if (data?.exercises?.length > 0) {
             setSessionName(data.session_name ?? '');
             setSessionSource(data.session_source ?? 'free');
+            setSessionRoutineId(data.session_routine_id ?? null);
             setSessionExs(data.exercises);
             setInWorkout(true);
             setView('session');
@@ -351,7 +359,7 @@ export default function ExerciseLogger() {
   useEffect(() => {
     if (!inWorkout) return;
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionName, sessionSource, sessionExs }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionName, sessionSource, sessionRoutineId, sessionExs }));
 
     if (user) {
       clearTimeout(dbSaveTimer.current);
@@ -361,6 +369,7 @@ export default function ExerciseLogger() {
             user_id: user.id,
             session_name: sessionName,
             session_source: sessionSource,
+            session_routine_id: sessionRoutineId,
             exercises: sessionExs,
             updated_at: new Date().toISOString(),
           });
@@ -380,6 +389,7 @@ export default function ExerciseLogger() {
         user_id: user.id,
         session_name: sessionName,
         session_source: sessionSource,
+        session_routine_id: sessionRoutineId,
         exercises: sessionExs,
         updated_at: new Date().toISOString(),
       });
@@ -401,6 +411,7 @@ export default function ExerciseLogger() {
   function goFreeSession() {
     setSessionName(today.toString());
     setSessionSource("free");
+    setSessionRoutineId(null);
     setSessionExs([]);
     setSSearch("");
     setSAddOpen(false);
@@ -411,6 +422,7 @@ export default function ExerciseLogger() {
   function goRoutineSession(r) {
     setSessionName(r.name);
     setSessionSource("routine");
+    setSessionRoutineId(r.id);
     // Pre-populate exercise cards from the saved routine
     const initialExs = r.exercises.map((ex) => {
       const sets = Array.isArray(ex.sets)
@@ -644,6 +656,8 @@ export default function ExerciseLogger() {
     setView("select");
     setEnding(false);
     setSessionExs([]);
+    setSessionRoutineId(null);
+    setUpdateRoutineDefaults(false);
     setInWorkout(false);
     localStorage.removeItem(STORAGE_KEY);
     if (user) supabase.from('active_workouts').delete().eq('user_id', user.id);
@@ -653,6 +667,26 @@ export default function ExerciseLogger() {
       const { data: { user: u } } = await supabase.auth.getUser();
 
       const logName = workoutLogName.trim() || sessionName;
+
+      if (sessionSource === "routine" && updateRoutineDefaults && sessionRoutineId) {
+        const exercises = sessionExs.map((ex) => ({
+          name: ex.name,
+          unit: ex.unit,
+          sets: ex.sets.map(({ done: _, ...s }) => ({
+            reps: Number(s.reps) || 1,
+            weight: s.weight !== "" ? Number(s.weight) : null,
+            rir: s.rir !== "" ? Number(s.rir) : null,
+          })),
+        }));
+        await supabase
+          .from("exercise_routines")
+          .update({ exercises })
+          .eq("id", sessionRoutineId);
+        setRoutines((prev) =>
+          prev.map((r) => (r.id === sessionRoutineId ? { ...r, exercises } : r))
+        );
+      }
+
       if (saveAsRoutine) {
         const exercises = sessionExs.map((ex) => ({
           name: ex.name,
@@ -934,6 +968,7 @@ export default function ExerciseLogger() {
               if (sessionExs.length === 0) { resetSession(); return; }
               setWorkoutLogName(sessionName);
               setSaveAsRoutine(false);
+              setUpdateRoutineDefaults(false);
               setEnding(true);
             }}
             className="bg-transparent border border-[#e0e0e0] rounded-lg px-4 py-1.5 cursor-pointer text-[13px] text-[#555] font-semibold shrink-0"
@@ -972,7 +1007,20 @@ export default function ExerciseLogger() {
             className="py-2.5 px-3 border border-[#e0e0e0] rounded-lg text-[16px] outline-none bg-[#fafafa] w-full mb-3"
           />
 
-          {/* Save as routine toggle */}
+          {/* Update existing routine defaults */}
+          {sessionSource === "routine" && sessionRoutineId && (
+            <label className="flex items-center gap-2.5 cursor-pointer mb-3 select-none">
+              <input
+                type="checkbox"
+                checked={updateRoutineDefaults}
+                onChange={(e) => setUpdateRoutineDefaults(e.target.checked)}
+                className="w-4 h-4 accent-[#ff8c42] cursor-pointer"
+              />
+              <span className="text-sm text-[#555]">Update &ldquo;{sessionName}&rdquo; routine defaults</span>
+            </label>
+          )}
+
+          {/* Save as new routine toggle */}
           <label className="flex items-center gap-2.5 cursor-pointer mb-3 select-none">
             <input
               type="checkbox"
