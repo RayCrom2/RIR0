@@ -4,14 +4,18 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
 const FIELDS = [
-  { key: "name",     label: "Food Name",    required: true  },
-  { key: "calories", label: "Calories",     required: true  },
-  { key: "protein",  label: "Protein (g)",  required: false },
-  { key: "carbs",    label: "Carbs (g)",    required: false },
-  { key: "fat",      label: "Fat (g)",      required: false },
-  { key: "fiber",    label: "Fiber (g)",    required: false },
-  { key: "sugar",    label: "Sugar (g)",    required: false },
+  { key: "name",           label: "Food Name",       required: true  },
+  { key: "calories",       label: "Calories",        required: true  },
+  { key: "protein",        label: "Protein (g)",     required: false },
+  { key: "carbs",          label: "Carbs (g)",       required: false },
+  { key: "fat",            label: "Fat (g)",         required: false },
+  { key: "fiber",          label: "Fiber (g)",       required: false },
+  { key: "sugar",          label: "Sugar (g)",       required: false },
+  { key: "serving_amount", label: "Serving Amount",  required: false },
 ];
+
+const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000, ml: 1, cup: 240, tbsp: 15, tsp: 5 };
+const SERVING_UNITS = ["g", "oz", "lb", "kg", "ml", "cup", "tbsp", "tsp"];
 
 const MACRO_KEYS = ["calories", "protein", "carbs", "fat", "fiber", "sugar"];
 
@@ -31,7 +35,8 @@ const ALIASES = {
   carbs:    ["carbs", "carbohydrates", "carbohydrate", "net carbs", "carbs (g)", "carbohydrates (g)", "total carbohydrate (g)", "total carbohydrates (g)"],
   fat:      ["fat", "total fat", "fat (g)", "total fat (g)", "fats"],
   fiber:    ["fiber", "dietary fiber", "fibre", "fiber (g)", "dietary fiber (g)", "dietary fibre (g)"],
-  sugar:    ["sugar", "sugars", "total sugars", "sugar (g)", "sugars (g)"],
+  sugar:          ["sugar", "sugars", "total sugars", "sugar (g)", "sugars (g)"],
+  serving_amount: ["serving", "serving size", "serving amount", "amount", "portion", "portion size", "serving (g)", "serving size (g)", "quantity"],
 };
 
 const SOURCES = [
@@ -44,6 +49,18 @@ const SOURCES = [
 
 function macrosMatch(a, b) {
   return MACRO_KEYS.every(k => Number(a[k] || 0) === Number(b[k] || 0));
+}
+
+function servingMatch(existing, imported) {
+  const eAmt = Number(existing.serving_amount || 0);
+  const iAmt = Number(imported.serving_amount || 0);
+  if (eAmt === 0 && iAmt === 0) return true;
+  if (eAmt === 0 || iAmt === 0) return false;
+  const eUnit = (existing.serving_unit || "g").toLowerCase();
+  const iUnit = (imported._unit || "g").toLowerCase();
+  const eG = eAmt * (UNIT_TO_G[eUnit] ?? 1);
+  const iG = iAmt * (UNIT_TO_G[iUnit] ?? 1);
+  return Math.abs(eG - iG) < 0.1;
 }
 
 function autoMap(headers) {
@@ -103,13 +120,14 @@ async function fetchSheets(url) {
 function applyMapping(rows, mapping) {
   return rows.slice(1)
     .map(row => ({
-      name:     String(row[Number(mapping.name)]     ?? "").trim(),
-      calories: Number(row[Number(mapping.calories)] ?? 0) || 0,
-      protein:  mapping.protein  !== "" ? (Number(row[Number(mapping.protein)]  ?? 0) || 0) : 0,
-      carbs:    mapping.carbs    !== "" ? (Number(row[Number(mapping.carbs)]    ?? 0) || 0) : 0,
-      fat:      mapping.fat      !== "" ? (Number(row[Number(mapping.fat)]      ?? 0) || 0) : 0,
-      fiber:    mapping.fiber    !== "" ? (Number(row[Number(mapping.fiber)]    ?? 0) || 0) : 0,
-      sugar:    mapping.sugar    !== "" ? (Number(row[Number(mapping.sugar)]    ?? 0) || 0) : 0,
+      name:           String(row[Number(mapping.name)]     ?? "").trim(),
+      calories:       Number(row[Number(mapping.calories)] ?? 0) || 0,
+      protein:        mapping.protein        !== "" ? (Number(row[Number(mapping.protein)]        ?? 0) || 0) : 0,
+      carbs:          mapping.carbs          !== "" ? (Number(row[Number(mapping.carbs)]          ?? 0) || 0) : 0,
+      fat:            mapping.fat            !== "" ? (Number(row[Number(mapping.fat)]            ?? 0) || 0) : 0,
+      fiber:          mapping.fiber          !== "" ? (Number(row[Number(mapping.fiber)]          ?? 0) || 0) : 0,
+      sugar:          mapping.sugar          !== "" ? (Number(row[Number(mapping.sugar)]          ?? 0) || 0) : 0,
+      serving_amount: mapping.serving_amount !== "" ? (Number(row[Number(mapping.serving_amount)] ?? 0) || null) : null,
     }))
     .filter(f => f.name && f.calories > 0);
 }
@@ -163,13 +181,16 @@ export default function FoodImportModal({ open, onClose, onImported }) {
   const [dupeRes, setDupeRes] = useState({});
   const [dupeRenames, setDupeRenames] = useState({});
 
+  const [servingUnit, setServingUnit] = useState("g");
+  const [foodUnits, setFoodUnits] = useState({});
+
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
   useEffect(() => {
     if (!open || !user) return;
     supabase.from("custom_foods")
-      .select("name, calories, protein, carbs, fat, fiber, sugar")
+      .select("name, calories, protein, carbs, fat, fiber, sugar, serving_amount, serving_unit")
       .eq("user_id", user.id)
       .then(({ data }) => {
         if (data) {
@@ -186,6 +207,8 @@ export default function FoodImportModal({ open, onClose, onImported }) {
     setLoading(false); setError(""); setRawRows([]);
     setMapping({}); setParsedFoods([]); setSelected([]);
     setCleanFoods([]); setDupes([]); setDupeRes({}); setDupeRenames({});
+    setServingUnit("g");
+    setFoodUnits({});
     setImporting(false); setImportResult(null);
   }, [open]);
 
@@ -230,7 +253,9 @@ export default function FoodImportModal({ open, onClose, onImported }) {
   }
 
   function confirmPreview() {
-    const chosen = parsedFoods.filter((_, i) => selected[i]);
+    const chosen = parsedFoods
+      .map((f, i) => ({ ...f, _unit: foodUnits[i] ?? servingUnit }))
+      .filter((_, i) => selected[i]);
     if (chosen.length === 0) { setError("Select at least one food."); return; }
 
     const clean = [], diffDupeList = [];
@@ -238,9 +263,9 @@ export default function FoodImportModal({ open, onClose, onImported }) {
       const existing = existingFoods.get(f.name.toLowerCase().trim());
       if (!existing) {
         clean.push(f);
-      } else if (!macrosMatch(existing, f)) {
-        diffDupeList.push(f);
-        // Same macros → silently skip (keep original), don't add anywhere
+      } else if (!macrosMatch(existing, f) || !servingMatch(existing, f)) {
+        diffDupeList.push({ ...f, _existing: existing });
+        // Identical macros AND serving → silently skip
       }
     }
 
@@ -260,6 +285,16 @@ export default function FoodImportModal({ open, onClose, onImported }) {
     }
   }
 
+  function buildServingFields(f) {
+    if (!f.serving_amount) return {};
+    const unit = f._unit ?? servingUnit;
+    return {
+      serving_amount: f.serving_amount,
+      serving_unit: unit,
+      serving_weight_g: parseFloat((f.serving_amount * (UNIT_TO_G[unit] ?? 1)).toFixed(2)),
+    };
+  }
+
   async function runImport(clean, diffDupes, resolutions, renames) {
     setImporting(true);
     let added = 0, replaced = 0, skipped = 0;
@@ -276,13 +311,13 @@ export default function FoodImportModal({ open, onClose, onImported }) {
     const newFoods = [];
     if (toInsert.length > 0) {
       const { data } = await supabase.from("custom_foods")
-        .insert(toInsert.map(f => ({ user_id: user.id, name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber, sugar: f.sugar })))
+        .insert(toInsert.map(f => ({ user_id: user.id, name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fat: f.fat, fiber: f.fiber, sugar: f.sugar, ...buildServingFields(f) })))
         .select();
       if (data) { newFoods.push(...data); added += data.length; }
     }
     for (const food of toReplace) {
       const { data } = await supabase.from("custom_foods")
-        .update({ calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, fiber: food.fiber, sugar: food.sugar })
+        .update({ calories: food.calories, protein: food.protein, carbs: food.carbs, fat: food.fat, fiber: food.fiber, sugar: food.sugar, ...buildServingFields(food) })
         .eq("user_id", user.id).ilike("name", food.name).select();
       if (data) { newFoods.push(...data); replaced++; }
     }
@@ -303,11 +338,13 @@ export default function FoodImportModal({ open, onClose, onImported }) {
   const selectedCount = selected.filter(Boolean).length;
 
   // For preview: which selected foods are macro-different dupes (only those get the ⚠ warning)
-  const isDiffDupe = f => {
+  const isDiffDupe = (f, i) => {
     const ex = existingFoods.get(f.name.toLowerCase().trim());
-    return ex && !macrosMatch(ex, f);
+    if (!ex) return false;
+    const withUnit = { ...f, _unit: foodUnits[i] ?? servingUnit };
+    return !macrosMatch(ex, withUnit) || !servingMatch(ex, withUnit);
   };
-  const hasDiffDupes = parsedFoods.some((f, i) => selected[i] && isDiffDupe(f));
+  const hasDiffDupes = parsedFoods.some((f, i) => selected[i] && isDiffDupe(f, i));
 
   const overlay = { position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 };
   const modal = { background: "#fff", borderRadius: 16, padding: "28px 24px", width: "100%", maxWidth: 560, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" };
@@ -452,6 +489,10 @@ export default function FoodImportModal({ open, onClose, onImported }) {
             ))}
           </div>
 
+          <p style={{ fontSize: 12, color: "#888", background: "#f7f7fb", borderRadius: 8, padding: "8px 12px", margin: "0 0 16px" }}>
+            💡 If you map a Serving Amount column, you'll be able to select the unit (g, oz, cup, etc.) on the next screen.
+          </p>
+
           {sampleRows.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 6px" }}>
@@ -513,6 +554,20 @@ export default function FoodImportModal({ open, onClose, onImported }) {
             {selectedCount} of {parsedFoods.length} selected for import.
           </p>
 
+          {mapping.serving_amount !== "" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, background: "#f7f7fb", borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>Default serving unit:</span>
+              <select
+                value={servingUnit}
+                onChange={e => { setServingUnit(e.target.value); setFoodUnits({}); }}
+                style={{ padding: "5px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 13, outline: "none", background: "#fff", cursor: "pointer" }}
+              >
+                {SERVING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: "#aaa" }}>Override per row below</span>
+            </div>
+          )}
+
           <div style={{ overflowX: "auto", maxHeight: 340, overflowY: "auto", border: "1px solid #f0f0f0", borderRadius: 10 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ position: "sticky", top: 0, background: "#f7f7fb", zIndex: 1 }}>
@@ -525,11 +580,14 @@ export default function FoodImportModal({ open, onClose, onImported }) {
                   <th style={{ padding: "8px 10px", textAlign: "right", color: "#888", fontWeight: 600 }}>Fat</th>
                   <th style={{ padding: "8px 10px", textAlign: "right", color: "#888", fontWeight: 600 }}>Fib</th>
                   <th style={{ padding: "8px 10px", textAlign: "right", color: "#888", fontWeight: 600 }}>Sug</th>
+                  {mapping.serving_amount !== "" && (
+                    <th style={{ padding: "8px 10px", textAlign: "right", color: "#888", fontWeight: 600, whiteSpace: "nowrap" }}>Serving / Unit</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {parsedFoods.map((f, i) => {
-                  const diffDupe = isDiffDupe(f);
+                  const diffDupe = isDiffDupe(f, i);
                   return (
                     <tr key={i} style={{ borderTop: "1px solid #f5f5f5", background: selected[i] ? "#fff" : "#fafafa", opacity: selected[i] ? 1 : 0.4 }}>
                       <td style={{ padding: "7px 10px", textAlign: "center" }}>
@@ -549,6 +607,23 @@ export default function FoodImportModal({ open, onClose, onImported }) {
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{f.fat || "—"}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{f.fiber || "—"}</td>
                       <td style={{ padding: "7px 10px", textAlign: "right" }}>{f.sugar || "—"}</td>
+                      {mapping.serving_amount !== "" && (
+                        <td style={{ padding: "4px 6px", textAlign: "right" }}>
+                          {f.serving_amount ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}>
+                              <span style={{ fontSize: 12, color: "#555" }}>{f.serving_amount}</span>
+                              <select
+                                value={foodUnits[i] ?? servingUnit}
+                                onChange={e => setFoodUnits(u => ({ ...u, [i]: e.target.value }))}
+                                onClick={e => e.stopPropagation()}
+                                style={{ padding: "2px 4px", border: "1px solid #e0e0e0", borderRadius: 6, fontSize: 11, color: "#555", background: "#fafafa", cursor: "pointer", outline: "none" }}
+                              >
+                                {SERVING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                              </select>
+                            </div>
+                          ) : "—"}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -588,8 +663,11 @@ export default function FoodImportModal({ open, onClose, onImported }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20, maxHeight: 400, overflowY: "auto" }}>
             {dupes.map(f => {
-              const existing = existingFoods.get(f.name.toLowerCase().trim());
+              const existing = f._existing ?? existingFoods.get(f.name.toLowerCase().trim());
               const res = dupeRes[f.name] ?? "skip";
+              const servingDiffers = !servingMatch(existing, f);
+              const eServingStr = existing?.serving_amount ? `${existing.serving_amount} ${existing.serving_unit || "g"}` : "—";
+              const iServingStr = f.serving_amount ? `${f.serving_amount} ${f._unit || servingUnit}` : "—";
               return (
                 <div key={f.name} style={{ border: "1px solid #f0f0f0", borderRadius: 10, padding: "14px" }}>
                   <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>{f.name}</div>
@@ -620,6 +698,11 @@ export default function FoodImportModal({ open, onClose, onImported }) {
                           </tr>
                         );
                       })}
+                      <tr style={{ borderTop: "1px solid #f5f5f5", background: servingDiffers ? "#fffbf0" : undefined }}>
+                        <td style={{ padding: "5px 8px", color: "#888", fontSize: 11, fontWeight: servingDiffers ? 600 : 400 }}>Serving</td>
+                        <td style={{ padding: "5px 10px", textAlign: "right", color: "#333" }}>{eServingStr}</td>
+                        <td style={{ padding: "5px 10px", textAlign: "right", color: servingDiffers ? "#f0a500" : "#333", fontWeight: servingDiffers ? 700 : 400 }}>{iServingStr}</td>
+                      </tr>
                     </tbody>
                   </table>
 
