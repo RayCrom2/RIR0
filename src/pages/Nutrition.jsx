@@ -34,6 +34,20 @@ function clearGuestEntries() {
   localStorage.removeItem(GUEST_LOG_KEY);
 }
 
+const GUEST_PLAN_KEY = "rir0_guest_plan";
+function loadGuestPlan() {
+  try {
+    const raw = localStorage.getItem(GUEST_PLAN_KEY);
+    if (!raw) return [];
+    const { date, items } = JSON.parse(raw);
+    if (date !== todayStr()) { localStorage.removeItem(GUEST_PLAN_KEY); return []; }
+    return items || [];
+  } catch { return []; }
+}
+function saveGuestPlan(items) {
+  localStorage.setItem(GUEST_PLAN_KEY, JSON.stringify({ date: todayStr(), items }));
+}
+
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
 const UNIT_TO_G  = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
 const UNIT_TO_ML = { ml: 1, "fl oz": 29.5735, l: 1000 };
@@ -195,6 +209,7 @@ export default function Nutrition() {
   const [planMode, setPlanMode] = useState(false);
   const [plannedEntries, setPlannedEntries] = useState([]);
   const [planExitOpen, setPlanExitOpen] = useState(false);
+  const [dayPlanItems, setDayPlanItems] = useState([]);
   const [entriesLoaded, setEntriesLoaded] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [guestGoalsOpen, setGuestGoalsOpen] = useState(false);
@@ -301,6 +316,7 @@ export default function Nutrition() {
     if (loading) return;
     if (!user) {
       setEntries(loadGuestEntries());
+      setDayPlanItems(loadGuestPlan());
       setEntriesLoaded(true);
       return;
     }
@@ -308,7 +324,7 @@ export default function Nutrition() {
     const guestEntries = loadGuestEntries();
     clearGuestEntries();
     const syncPromises = guestEntries.map(({ id: _id, ...rest }) =>
-      supabase.from("nutrition_logs").insert({ ...rest, user_id: user.id })
+      supabase.from("nutrition_logs").insert({ ...rest, user_id: user.id, is_planned: false })
     );
     Promise.all(syncPromises).then(() => {
       supabase
@@ -319,7 +335,9 @@ export default function Nutrition() {
         .lt("logged_at", tomorrowStr())
         .order("logged_time")
         .then(({ data }) => {
-          setEntries(data || []);
+          const all = data || [];
+          setEntries(all.filter(e => !e.is_planned));
+          setDayPlanItems(all.filter(e => e.is_planned));
           setEntriesLoaded(true);
         });
     });
@@ -937,6 +955,41 @@ export default function Nutrition() {
     await supabase.from("custom_foods").update(updated).eq("id", editingLibraryFood.id);
     setSavedFoods((prev) => prev.map((f) => f.id === editingLibraryFood.id ? { ...f, ...updated } : f));
     setEditingLibraryFood(null);
+  }
+
+  async function markPlanItemComplete(item) {
+    const now = new Date();
+    const loggedTime = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    const next = dayPlanItems.filter(i => i.id !== item.id);
+    setDayPlanItems(next);
+    if (user) {
+      const { data } = await supabase.from("nutrition_logs")
+        .update({ is_planned: false, logged_at: todayStr(), logged_time: loggedTime })
+        .eq("id", item.id)
+        .select()
+        .single();
+      if (data) {
+        const nextEntries = [...entries, data];
+        setEntries(nextEntries);
+        upsertDailyStatus(todayStr(), nextEntries, goals, user.id);
+      }
+    } else {
+      const nextEntries = [...entries, { ...item, id: "guest_" + Date.now() + Math.random(), logged_time: loggedTime }];
+      setEntries(nextEntries);
+      saveGuestEntries(nextEntries);
+      saveGuestPlan(next);
+    }
+    showToast("Marked as complete!", "#5cb85c");
+  }
+
+  async function removePlanItem(id) {
+    const next = dayPlanItems.filter(i => i.id !== id);
+    setDayPlanItems(next);
+    if (user) {
+      await supabase.from("nutrition_logs").delete().eq("id", id);
+    } else {
+      saveGuestPlan(next);
+    }
   }
 
   const sortedEntries = [...entries].sort((a, b) => parseLoggedTime(a.logged_time) - parseLoggedTime(b.logged_time));
@@ -2192,6 +2245,11 @@ export default function Nutrition() {
           <h3 style={{ margin: 0, fontSize: 16 }}>
             Today's Log ({entries.length}{" "}
             {entries.length === 1 ? "item" : "items"})
+            {dayPlanItems.length > 0 && (
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#4f8ef7", marginLeft: 8 }}>
+                · {dayPlanItems.length} planned
+              </span>
+            )}
           </h3>
           {entries.length > 0 && (
             <button
@@ -2211,7 +2269,7 @@ export default function Nutrition() {
           )}
         </div>
 
-        {entries.length === 0 && plannedEntries.length === 0 ? (
+        {entries.length === 0 && plannedEntries.length === 0 && dayPlanItems.length === 0 ? (
           <p
             style={{
               textAlign: "center",
@@ -2296,6 +2354,34 @@ export default function Nutrition() {
                   </div>
                 </div>
               ))}
+              {dayPlanItems.length > 0 && (
+                <div style={{ borderTop: "2px dashed #93c5fd", paddingTop: 8 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px 2px" }}>
+                    Planned — tap ✓ when complete
+                  </p>
+                  {dayPlanItems.map(item => (
+                    <div key={item.id} style={{ background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: "#1d4ed8", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>{item.food_name}</span>
+                        <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 700, flexShrink: 0 }}>{item.calories} kcal</span>
+                      </div>
+                      {item.serving_amount && (
+                        <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 2 }}>{fmtServing(item.serving_amount, item.serving_unit)}</div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button
+                          onClick={() => markPlanItemComplete(item)}
+                          style={{ flex: 1, padding: "7px 0", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                        >✓ Mark as Complete</button>
+                        <button
+                          onClick={() => removePlanItem(item.id)}
+                          style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
+                        >✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{ background: "#fff8f3", border: "1px solid #ffe8d0", borderRadius: 10, padding: "12px 14px" }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: "#555", margin: "0 0 8px" }}>Total</p>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -2390,6 +2476,42 @@ export default function Nutrition() {
                     </td>
                   </tr>
                 ))}
+                {dayPlanItems.length > 0 && (
+                  <tr style={{ background: "#dbeafe" }}>
+                    <td colSpan={3 + visibleMacroList.length} style={{ padding: "6px 16px", fontSize: 11, fontWeight: 700, color: "#4f8ef7", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Planned — click ✓ when complete
+                    </td>
+                    <td />
+                  </tr>
+                )}
+                {dayPlanItems.map(item => (
+                  <tr key={item.id} style={{ borderTop: "1px solid #dbeafe", background: "#f0f7ff" }}>
+                    <td style={{ padding: "10px 16px", fontWeight: 500, color: "#1d4ed8" }}>{item.food_name}</td>
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {fmtServing(item.serving_amount, item.serving_unit)}
+                    </td>
+                    {visibleMacroList.map((m) => (
+                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: "#4f8ef7", fontWeight: m.key === "calories" ? 700 : 600 }}>
+                        {item[m.key] > 0 ? (m.key === "calories" ? item[m.key] : item[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
+                      </td>
+                    ))}
+                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>{item.logged_time || "—"}</td>
+                    <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button
+                          onClick={() => markPlanItemComplete(item)}
+                          style={{ background: "#4f8ef7", border: "none", borderRadius: 6, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, padding: "5px 10px" }}
+                          title="Mark as Complete"
+                        >✓</button>
+                        <button
+                          onClick={() => removePlanItem(item.id)}
+                          style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px" }}
+                          title="Remove from plan"
+                        >✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}>
@@ -2436,6 +2558,28 @@ export default function Nutrition() {
           showToast("Plan logged!", "#4f8ef7");
         };
         const discard = () => { setPlannedEntries([]); setPlanMode(false); setPlanExitOpen(false); };
+        const setPlan = async () => {
+          setPlannedEntries([]);
+          setPlanMode(false);
+          setPlanExitOpen(false);
+          if (user) {
+            const toInsert = plannedEntries.map(e => ({
+              user_id: user.id, logged_at: todayStr(), logged_time: e.logged_time,
+              food_name: e.food_name, calories: e.calories, protein: e.protein,
+              fat: e.fat, carbs: e.carbs, fiber: e.fiber, sugar: e.sugar,
+              serving_amount: e.serving_amount, serving_unit: e.serving_unit,
+              is_planned: true,
+            }));
+            const { data } = await supabase.from("nutrition_logs").insert(toInsert).select();
+            if (data) setDayPlanItems(prev => [...prev, ...data]);
+          } else {
+            const items = plannedEntries.map(e => ({ ...e, id: "guest_plan_" + Date.now() + Math.random() }));
+            const merged = [...dayPlanItems, ...items];
+            setDayPlanItems(merged);
+            saveGuestPlan(merged);
+          }
+          showToast("Plan set for today!", "#4f8ef7");
+        };
         const n = plannedEntries.length;
         const logLabel = `Log ${n} ${n === 1 ? "item" : "items"}`;
 
@@ -2453,6 +2597,10 @@ export default function Nutrition() {
                 <button onClick={logAll}
                   style={{ width: "100%", padding: "13px 0", background: "#4f8ef7", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>
                   {logLabel}
+                </button>
+                <button onClick={setPlan}
+                  style={{ width: "100%", padding: "13px 0", background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, color: "#4f8ef7", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>
+                  Set as Today's Plan
                 </button>
                 <button onClick={discard}
                   style={{ width: "100%", padding: "13px 0", background: "#f7f7fb", border: "none", borderRadius: 10, color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
@@ -2542,6 +2690,10 @@ export default function Nutrition() {
                 <button onClick={discard}
                   style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555", fontWeight: 600 }}>
                   Discard
+                </button>
+                <button onClick={setPlan}
+                  style={{ flex: 2, padding: "10px 0", border: "1.5px solid #93c5fd", borderRadius: 8, background: "#eff6ff", color: "#4f8ef7", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                  Set as Today's Plan
                 </button>
                 <button onClick={logAll}
                   style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
