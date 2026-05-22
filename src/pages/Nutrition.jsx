@@ -191,6 +191,7 @@ export default function Nutrition() {
   const [isFromBarcode, setIsFromBarcode] = useState(false);
   const [barcodeUnit, setBarcodeUnit] = useState("g");
   const [logEntryMenu, setLogEntryMenu] = useState(null);
+  const [expandedLogIds, setExpandedLogIds] = useState(new Set());
   const [planMode, setPlanMode] = useState(false);
   const [plannedEntries, setPlannedEntries] = useState([]);
   const [planExitOpen, setPlanExitOpen] = useState(false);
@@ -1724,7 +1725,7 @@ export default function Nutrition() {
                   <option value="sugar">Highest Sugar</option>
                 </select>
               </div>
-            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto" }}>
+            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto", overflowX: "hidden" }}>
               {filteredSortedFoods.length === 0 && (
                 <p style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "12px 0", margin: 0 }}>
                   No foods match your search.
@@ -2223,34 +2224,48 @@ export default function Nutrition() {
           </p>
         ) : isMobile ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {sortedEntries.map((entry) => (
-                <div key={entry.id} onClick={() => setLogEntryMenu(entry)}
-                  style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, marginRight: 8 }}>{entry.food_name}</span>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                      {entry.serving_amount ? (
-                        <span style={{ fontSize: 12, color: "#aaa", whiteSpace: "nowrap" }}>
-                          {fmtServing(entry.serving_amount, entry.serving_unit)}
-                        </span>
-                      ) : null}
-                      <span style={{ fontSize: 11, color: "#bbb", whiteSpace: "nowrap" }}>{entry.logged_time || ""}</span>
+              {sortedEntries.map((entry) => {
+                const isExpanded = expandedLogIds.has(entry.id);
+                return (
+                  <div key={entry.id}
+                    onClick={() => setExpandedLogIds(prev => {
+                      const next = new Set(prev);
+                      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                      return next;
+                    })}
+                    style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
+                    {/* Collapsed: food name top-left, time top-right; serving bottom-left, calories bottom-right */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, minWidth: 0, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name}</span>
+                      {entry.logged_time && <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>{entry.logged_time}</span>}
                     </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    {visibleMacroList.map((m) => (
-                      <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
-                        <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
-                          {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
-                        </span>
-                        <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
-                          {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
-                        </span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
+                      <span style={{ fontSize: 12, color: "#aaa" }}>{entry.serving_amount ? fmtServing(entry.serving_amount, entry.serving_unit) : ""}</span>
+                      <span style={{ fontSize: 13, color: "#ff8c42", fontWeight: 700, flexShrink: 0 }}>{entry.calories} kcal</span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          {visibleMacroList.map((m) => (
+                            <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
+                              <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
+                                {{ calories: "Calories", protein: "Protein", carbs: "Carbs", fat: "Fat", fiber: "Fiber", sugar: "Sugar" }[m.key]}
+                              </span>
+                              <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
+                                {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
+                              </span>
+                            </div>
+                          ))}
+                          <button
+                            onClick={e => { e.stopPropagation(); setLogEntryMenu(entry); }}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 20, lineHeight: 1, padding: "0 2px", marginLeft: "auto", alignSelf: "flex-start" }}
+                          >⋮</button>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {planMode && plannedEntries.map((entry) => (
                 <div key={entry.id}
                   style={{ background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, padding: "12px 14px" }}>

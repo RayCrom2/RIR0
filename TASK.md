@@ -1,14 +1,13 @@
-# Task: Easy Data Migration
+# Task: Adjust My Food Library and Daily Food log on Mobile
 
 ## Status: Completed
 
 ## Steps
 
-- [x] 1. On onboarding module, create a step where users can copy and paste or import from google sheets, and excel columns or lists of food names, followed by lists of each macro etc. Calories and Food Names would be required and for any data that is pasted, they length much match the length of the food names list. Also suggest any other integrations we could integrate alongside googlesheets and excel
-- [x] 2. If skipped in onboarding, have a small import option be available on the profile page. Says something like "Import from Google sheets, Excel, etc."
+- [x] 1. Remove horizontal scrolling in My Food Library, there is no information off-screen so the module should only have a vertical scroll functionality
+- [x] 2. The cards in the daily log on mobile should just show item name, serving size, and calories. Show all nutrients when clicking on the item and have the "Save to my food library" and "remove from log" options in a menu behind a button of three dots in a column in the top right corner
+
 
 
 ## Notes
-- If there is an easy way of importing from these mediums rather than copy and pasting columns at a time, prioritize that
-- Should be one of the last steps of the onboarding module
 - Ask questions where there is uncertainty or options of how to handle cases
