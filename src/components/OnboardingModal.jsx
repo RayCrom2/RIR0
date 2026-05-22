@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import FoodImportModal from "./FoodImportModal";
 
 const MACRO_FIELDS = [
   { key: "calories", minKey: "calories_min", dirKey: "calories_dir", label: "Calories", unit: "kcal", color: "#ff8c42", defaultDir: "below" },
@@ -84,10 +85,25 @@ export function calcSuggested({ gender, age, birth_date, height_cm, weight_kg, f
   const calories = Math.round((tdee + delta) / 50) * 50;
   const proteinPerKg = isLoss ? 2.2 : isGain ? 2.0 : 1.6;
   const protein = Math.round(w * proteinPerKg);
-  const fat = Math.round(calories * 0.28 / 9);
-  const carbs = Math.max(0, Math.round((calories - protein * 4 - fat * 9) / 4));
-  const fiber = Math.round(calories / 1000 * 14);
-  return { calories, protein, carbs, fat, fiber, sugar: 50 };
+  // Fat: range from 20% of calories (hormone floor) to 35% (upper limit)
+  const fatMin = Math.round(calories * 0.20 / 9);
+  const fat = Math.round(calories * 0.35 / 9);
+  // Use 28% fat midpoint for carb calculation so carbs stay reasonable
+  const fatMid = Math.round(calories * 0.28 / 9);
+  const carbs = Math.max(0, Math.round((calories - protein * 4 - fatMid * 9) / 4));
+  // Fiber: range from 14g/1000 kcal floor to 21g/1000 kcal ceiling (cap 50g)
+  const fiberMin = Math.round(calories / 1000 * 14);
+  const fiber = Math.min(50, Math.round(calories / 1000 * 21));
+  // Sugar: ≤ 8% of calories from sugar, clamped 25–50g
+  const sugar = Math.round(Math.min(50, Math.max(25, calories * 0.08 / 4)));
+  return {
+    calories, calories_dir: isGain ? "above" : "below", calories_min: null,
+    protein,  protein_dir: "above",                      protein_min: null,
+    carbs,    carbs_dir: "below",                        carbs_min: null,
+    fat,      fat_min: fatMin,
+    fiber,    fiber_min: fiberMin,
+    sugar,    sugar_dir: "below",                        sugar_min: null,
+  };
 }
 
 const isMobileDevice = () =>
@@ -240,6 +256,7 @@ export default function OnboardingModal() {
   const { user, needsOnboarding, setNeedsOnboarding } = useAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const [profile, setProfile] = useState({
     gender: "male", birth_date: "", height_cm: "", weight_kg: "",
@@ -276,7 +293,10 @@ export default function OnboardingModal() {
       deficitSeverity: overrideDeficit ?? deficitSeverity,
       surplusSeverity: overrideSurplus ?? surplusSeverity,
     });
-    if (calc) setMacros(m => ({ ...m, ...calc }));
+    if (calc) {
+      setMacros(m => ({ ...m, ...calc }));
+      setRangeEnabled(r => ({ ...r, calories: false, protein: false, carbs: false, fat: true, fiber: true, sugar: false }));
+    }
   }
 
   function setP(key, val) { setProfile(p => ({ ...p, [key]: val })); }
@@ -362,7 +382,7 @@ export default function OnboardingModal() {
       }}>
         {/* Step indicators */}
         <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-          {[1, 2, 3, 4].map(s => (
+          {[1, 2, 3, 4, 5].map(s => (
             <div key={s} style={{
               flex: 1, height: 4, borderRadius: 2,
               background: s <= step ? "#ff8c42" : "#f0f0f0",
@@ -621,11 +641,53 @@ export default function OnboardingModal() {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setStep(3)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
-              <button onClick={handleSave} disabled={saving}
-                style={{ ...primaryBtn, flex: 2, opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Saving…" : "Get Started"}
+              <button onClick={() => setStep(5)}
+                style={{ ...primaryBtn, flex: 2 }}>
+                Next →
               </button>
             </div>
+          </>
+        )}
+
+        {/* ── Step 5: Import foods ── */}
+        {step === 5 && (
+          <>
+            <h2 style={{ margin: "0 0 4px", fontSize: "1.3rem", fontWeight: 700 }}>Import your foods</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>
+              Already tracking in another app? Import your food library from Google Sheets, Excel, MyFitnessPal, Cronometer, and more.
+            </p>
+
+            <div style={{ background: "#f7f7fb", borderRadius: 12, padding: "18px 16px", marginBottom: 20 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                {["📊 Google Sheets", "📁 Excel / CSV", "🍎 MyFitnessPal", "🔬 Cronometer", "📋 Paste data"].map(s => (
+                  <span key={s} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#555" }}>{s}</span>
+                ))}
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>
+                All imported foods go to your personal food library and are available for logging.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setImportOpen(true)}
+              style={{ ...primaryBtn, marginBottom: 10 }}
+            >
+              Import Foods →
+            </button>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setStep(4)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
+              <button onClick={handleSave} disabled={saving}
+                style={{ ...secondaryBtn, flex: 2, opacity: saving ? 0.7 : 1 }}>
+                {saving ? "Saving…" : "Skip, Get Started →"}
+              </button>
+            </div>
+
+            <FoodImportModal
+              open={importOpen}
+              onClose={() => setImportOpen(false)}
+              onImported={() => { setImportOpen(false); handleSave(); }}
+            />
           </>
         )}
       </div>

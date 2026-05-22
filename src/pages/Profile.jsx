@@ -13,6 +13,7 @@ import {
   getAge,
   BirthDateInput,
 } from "../components/OnboardingModal";
+import FoodImportModal from "../components/FoodImportModal";
 
 function cmToFtIn(cm) {
   const totalIn = Number(cm) / 2.54;
@@ -179,6 +180,7 @@ export default function Profile() {
   const [goalWeightEditing, setGoalWeightEditing] = useState(false);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [unitPrefsOpen, setUnitPrefsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [pwaSheetOpen, setPwaSheetOpen] = useState(false);
   const showPwaCard = !isPwaStandalone() && window.matchMedia("(max-width: 767px)").matches;
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
@@ -1100,7 +1102,10 @@ export default function Profile() {
                           deficitSeverity,
                           surplusSeverity,
                         });
-                        if (calc) setGoals((g) => ({ ...g, ...calc }));
+                        if (calc) {
+                          setGoals((g) => ({ ...g, ...calc }));
+                          setRangeEnabled((r) => ({ ...r, calories: false, protein: false, carbs: false, fat: true, fiber: true, sugar: false }));
+                        }
                       }}
                       style={{
                         width: "100%",
@@ -1283,6 +1288,25 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      {user && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>
+          <div style={{ fontSize: 28, flexShrink: 0 }}>📥</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14, color: "#333" }}>Import Food Library</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Google Sheets, Excel, MyFitnessPal, Cronometer, and more</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            style={{ flexShrink: 0, background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            Import
+          </button>
+        </div>
+      )}
+
+      <FoodImportModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       {showPwaCard && (
         <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>

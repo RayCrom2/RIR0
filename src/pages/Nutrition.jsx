@@ -1969,6 +1969,9 @@ export default function Nutrition() {
             onClose={() => { setPinnedFood(null); setPinnedLibraryFood(null); }}
             onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
             onEdit={pinnedLibraryFood ? openEditFromPinned : undefined}
+            style={libraryRef.current && containerRef.current
+              ? { top: libraryRef.current.getBoundingClientRect().top - containerRef.current.getBoundingClientRect().top }
+              : undefined}
           />
         ) : !isMobile && hoveredFood ? (
           <UsdaNutrientCard
