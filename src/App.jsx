@@ -407,36 +407,57 @@ export function PwaSheet({ ios, onInstall, onDismiss }) {
   );
 }
 
+function AppShell() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0,
+        background: "var(--bg)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: 16, zIndex: 9999,
+      }}>
+        <div className="auth-spinner" />
+        <p style={{ margin: 0, fontSize: 14, color: "#aaa", fontWeight: 500 }}>
+          Signing you in…
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <nav className="top-nav">
+        <NavLink to="/nutrition">Nutrition</NavLink>
+        <NavLink to="/exerciselogger">Exercise Logger</NavLink>
+        <NavLink to="/diagram">Muscle Diagram</NavLink>
+        <NavAuth />
+      </nav>
+
+      <ActiveWorkoutRedirect />
+      <Routes>
+        <Route path="/" element={<Navigate to="/nutrition" replace />} />
+        <Route path="/nutrition" element={<Nutrition />} />
+        <Route path="/exerciselogger" element={<ExerciseLogger />} />
+        <Route path="/diagram" element={<DiagramPage />} />
+        <Route path="/profile" element={<Profile />} />
+      </Routes>
+
+      <AuthModal />
+      <OnboardingModal />
+      <PwaInstallPrompt />
+      <BottomNav />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <div className="app">
-        <nav className="top-nav">
-          {/* <NavLink to="/">Home</NavLink> */}
-          <NavLink to="/nutrition">Nutrition</NavLink>
-          <NavLink to="/exerciselogger">Exercise Logger</NavLink>
-          <NavLink to="/diagram">Muscle Diagram</NavLink>
-          {/* <NavLink to="/videos">Videos</NavLink> */}
-          <NavAuth />
-        </nav>
-        {/* <p>
-        <img src="/pwa-icon.svg" alt="0" style={{ width: '3em', height: '3em', verticalAlign: 'middle', marginBottom: '0.15em' }} />
-        </p> */}
-
-        <ActiveWorkoutRedirect />
-        <Routes>
-          <Route path="/" element={<Navigate to="/nutrition" replace />} />
-          <Route path="/nutrition" element={<Nutrition />} />
-          <Route path="/exerciselogger" element={<ExerciseLogger />} />
-          <Route path="/diagram" element={<DiagramPage />} />
-          <Route path="/profile" element={<Profile />} />
-          {/* <Route path="/videos" element={<Videos />} /> */}
-        </Routes>
-
-        <AuthModal />
-        <OnboardingModal />
-        <PwaInstallPrompt />
-        <BottomNav />
+        <AppShell />
       </div>
     </AuthProvider>
   );

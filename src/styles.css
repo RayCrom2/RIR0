@@ -112,3 +112,25 @@ input:focus::placeholder {
     align-items: start;
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.auth-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #f0e0d0;
+  border-top-color: #ff8c42;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e4e4e4 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}

@@ -211,6 +211,10 @@ export default function Nutrition() {
   const [planExitOpen, setPlanExitOpen] = useState(false);
   const [dayPlanItems, setDayPlanItems] = useState([]);
   const [entriesLoaded, setEntriesLoaded] = useState(false);
+  const [entriesError, setEntriesError] = useState(false);
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+  const [libraryError, setLibraryError] = useState(false);
+  const [weightDismissed, setWeightDismissed] = useState(() => localStorage.getItem("rir0_weight_dismissed") === todayStr());
   const [weightInput, setWeightInput] = useState("");
   const [guestGoalsOpen, setGuestGoalsOpen] = useState(false);
   const [guestGoalsForm, setGuestGoalsForm] = useState({});
@@ -334,12 +338,21 @@ export default function Nutrition() {
         .gte("logged_at", todayStr())
         .lt("logged_at", tomorrowStr())
         .order("logged_time")
-        .then(({ data }) => {
-          const all = data || [];
-          setEntries(all.filter(e => !e.is_planned));
-          setDayPlanItems(all.filter(e => e.is_planned));
+        .then(({ data, error }) => {
+          if (error) {
+            console.error("Unable to fetch nutrition logs:", error);
+            setEntriesError(true);
+          } else {
+            const all = data || [];
+            setEntries(all.filter(e => !e.is_planned));
+            setDayPlanItems(all.filter(e => e.is_planned));
+          }
           setEntriesLoaded(true);
         });
+    }).catch((err) => {
+      console.error("Unable to fetch nutrition logs:", err);
+      setEntriesError(true);
+      setEntriesLoaded(true);
     });
   }, [user, loading]);
 
@@ -347,6 +360,7 @@ export default function Nutrition() {
   useEffect(() => {
     if (!user) {
       setSavedFoods([]);
+      setLibraryLoaded(true);
       return;
     }
     supabase
@@ -354,7 +368,15 @@ export default function Nutrition() {
       .select("*")
       .eq("user_id", user.id)
       .order("name")
-      .then(({ data }) => setSavedFoods(data || []));
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Unable to fetch food library:", error);
+          setLibraryError(true);
+        } else {
+          setSavedFoods(data || []);
+        }
+        setLibraryLoaded(true);
+      });
   }, [user]);
 
   useEffect(() => {
@@ -1184,7 +1206,21 @@ export default function Nutrition() {
             )}
           </div>
         </div>
-        {visibleMacroList.map((m) => {
+        {!entriesLoaded ? (
+          visibleMacroList.map((m) => (
+            <div key={m.key} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <div className="skeleton-shimmer" style={{ width: 72, height: 13, borderRadius: 4 }} />
+                <div className="skeleton-shimmer" style={{ width: 60, height: 13, borderRadius: 4 }} />
+              </div>
+              <div className="skeleton-shimmer" style={{ height: 8, borderRadius: 99 }} />
+            </div>
+          ))
+        ) : entriesError ? (
+          <p style={{ color: "#e05c5c", fontSize: 13, margin: 0, padding: "4px 0" }}>
+            Unable to fetch — check your connection and try again.
+          </p>
+        ) : visibleMacroList.map((m) => {
           const consumed = totals[m.key];
           const rawMax = goals[m.key];
           const minVal = goals[m.minKey] ?? null;
@@ -1244,8 +1280,8 @@ export default function Nutrition() {
 
       {/* Daily weigh-in prompt */}
       {user && entriesLoaded && entries.length === 0
+        && !weightDismissed
         && (!goals.next_weigh_in_date || todayStr() >= goals.next_weigh_in_date)
-        && localStorage.getItem(WEIGHT_DISMISS_KEY) !== todayStr()
         && !goals.hide_weight_prompt && (
         <div style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", marginBottom: 24 }}>
           <p style={{ fontWeight: 700, fontSize: 15, margin: "0 0 2px", color: "#333" }}>How much do you weigh today?</p>
@@ -1272,7 +1308,18 @@ export default function Nutrition() {
           <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
             <button
               type="button"
-              onClick={() => { localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr()); setWeightToday(null); }}
+              onClick={async () => {
+                setWeightDismissed(true);
+                localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr());
+                if (user) {
+                  const nextDate = tomorrowStr();
+                  await supabase.from("nutrition_goals").upsert(
+                    { user_id: user.id, next_weigh_in_date: nextDate },
+                    { onConflict: "user_id" }
+                  );
+                  setGoals(g => ({ ...g, next_weigh_in_date: nextDate }));
+                }
+              }}
               style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
             >
               Skip today
@@ -1737,7 +1784,17 @@ export default function Nutrition() {
                 </span>
               </span>
             </div>
-            {savedFoods.length === 0 ? (
+            {!libraryLoaded ? (
+              <div style={{ padding: "6px 0 16px" }}>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="skeleton-shimmer" style={{ height: 44, borderRadius: 8, marginBottom: 8 }} />
+                ))}
+              </div>
+            ) : libraryError ? (
+              <p style={{ color: "#e05c5c", fontSize: 13, padding: "12px 0 16px", margin: 0, textAlign: "center" }}>
+                Unable to fetch food library — check your connection and try again.
+              </p>
+            ) : savedFoods.length === 0 ? (
             <p
               style={{
                 textAlign: "center",
@@ -2269,7 +2326,17 @@ export default function Nutrition() {
           )}
         </div>
 
-        {entries.length === 0 && plannedEntries.length === 0 && dayPlanItems.length === 0 ? (
+        {!entriesLoaded ? (
+          <div style={{ padding: "16px 20px" }}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="skeleton-shimmer" style={{ height: 48, borderRadius: 8, marginBottom: 10 }} />
+            ))}
+          </div>
+        ) : entriesError ? (
+          <p style={{ textAlign: "center", color: "#e05c5c", padding: "32px 0", margin: 0, fontSize: 13 }}>
+            Unable to fetch — check your connection and try again.
+          </p>
+        ) : entries.length === 0 && plannedEntries.length === 0 && dayPlanItems.length === 0 ? (
           <p
             style={{
               textAlign: "center",
