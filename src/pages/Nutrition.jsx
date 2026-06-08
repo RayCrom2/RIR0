@@ -2967,7 +2967,7 @@ export default function Nutrition() {
             <p style={{ fontWeight: 700, fontSize: 15, color: "#333", margin: "0 0 4px" }}>{logEntryMenu.food_name}</p>
             {logEntryMenu.serving_amount && (
               <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>
-                {fmtServing(slogEntryMenu.serving_amount, logEntryMenu.serving_unit)}
+                {fmtServing(logEntryMenu.serving_amount, logEntryMenu.serving_unit)}
               </p>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
