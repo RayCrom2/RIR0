@@ -261,6 +261,7 @@ export default function Nutrition() {
   const libraryRef = useRef(null);
   const pinnedSheetRef = useRef(null);
   const pinnedDragStart = useRef(null);
+  const longPressRef = useRef({ timer: null, triggered: false });
 
   function showToast(message, color = "#22c55e") {
     clearTimeout(toastTimer.current);
@@ -2690,7 +2691,19 @@ export default function Nutrition() {
                 const isSelected = selectedEntryIds.has(entry.id);
                 return (
                   <div key={entry.id}
+                    onTouchStart={() => {
+                      longPressRef.current.triggered = false;
+                      clearTimeout(longPressRef.current.timer);
+                      longPressRef.current.timer = setTimeout(() => {
+                        longPressRef.current.triggered = true;
+                        setLogEntryMenu(entry);
+                      }, 500);
+                    }}
+                    onTouchEnd={() => clearTimeout(longPressRef.current.timer)}
+                    onTouchMove={() => clearTimeout(longPressRef.current.timer)}
+                    onContextMenu={(e) => e.preventDefault()}
                     onClick={() => {
+                      if (longPressRef.current.triggered) { longPressRef.current.triggered = false; return; }
                       if (selectionMode) { toggleEntrySelection(entry.id); return; }
                       setExpandedLogIds(prev => {
                         const next = new Set(prev);
@@ -2726,10 +2739,6 @@ export default function Nutrition() {
                                 </span>
                               </div>
                             ))}
-                            <button
-                              onClick={e => { e.stopPropagation(); setLogEntryMenu(entry); }}
-                              style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 20, lineHeight: 1, padding: "0 2px", marginLeft: "auto", alignSelf: "flex-start" }}
-                            >⋮</button>
                           </div>
                         </div>
                       )}
