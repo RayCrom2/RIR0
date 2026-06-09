@@ -195,6 +195,17 @@ function thStyle(extra = {}) {
   };
 }
 
+const FORM_STEPS = [
+  { name: "name",     label: "Food Name",         type: "text",    placeholder: "e.g. Grilled chicken" },
+  { name: "calories", label: "Calories",        type: "number",  unit: "kcal", placeholder: "e.g. 350" },
+  { name: "protein",  label: "Protein",         type: "number",  unit: "g",    placeholder: "0", optional: true },
+  { name: "carbs",    label: "Carbs",           type: "number",  unit: "g",    placeholder: "0", optional: true },
+  { name: "fat",      label: "Fat",             type: "number",  unit: "g",    placeholder: "0", optional: true },
+  { name: "fiber",    label: "Fiber",           type: "number",  unit: "g",    placeholder: "0", optional: true },
+  { name: "sugar",    label: "Sugar",           type: "number",  unit: "g",    placeholder: "0", optional: true },
+  { name: "serving",  label: "Serving Size",  type: "serving", optional: true },
+];
+
 export default function Nutrition() {
   const { user, requireAuth, loading } = useAuth();
   const [entries, setEntries] = useState([]);
@@ -207,6 +218,7 @@ export default function Nutrition() {
   const [libraryUnits, setLibraryUnits] = useState({});
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [formStep, setFormStep] = useState(-1);
   const [error, setError] = useState("");
   const [visibleMacros, setVisibleMacros] = useState(() => {
     try {
@@ -219,6 +231,9 @@ export default function Nutrition() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [usdaResults, setUsdaResults] = useState([]);
+  const [usdaQuery, setUsdaQuery] = useState("");
+  const [confirmHover, setConfirmHover] = useState(null);
+  const [confirmEdit, setConfirmEdit] = useState(false);
   const [usdaLoading, setUsdaLoading] = useState(false);
   const [usdaOpen, setUsdaOpen] = useState(false);
   const [hoveredFood, setHoveredFood] = useState(null);
@@ -261,7 +276,6 @@ export default function Nutrition() {
   const libraryRef = useRef(null);
   const pinnedSheetRef = useRef(null);
   const pinnedDragStart = useRef(null);
-  const longPressRef = useRef({ timer: null, triggered: false });
 
   function showToast(message, color = "#22c55e") {
     clearTimeout(toastTimer.current);
@@ -476,16 +490,6 @@ export default function Nutrition() {
     if (e.target.name === "serving_unit") {
       localStorage.setItem(LAST_UNIT_KEY, e.target.value);
     }
-    if (e.target.name === "name" && !formOpen) {
-      const q = e.target.value.trim();
-      clearTimeout(usdaDebounce.current);
-      if (q.length >= 2) {
-        usdaDebounce.current = setTimeout(() => searchUSDA(q), 400);
-      } else {
-        setUsdaResults([]);
-        setUsdaOpen(false);
-      }
-    }
   }
 
   async function handleBarcodeScan(barcode) {
@@ -571,6 +575,7 @@ export default function Nutrition() {
     setUsdaOpen(false);
     setUsdaResults([]);
     setHoveredFood(null);
+    setUsdaQuery("");
   }
 
   function handleAddFromUsda() {
@@ -647,8 +652,31 @@ export default function Nutrition() {
     });
   }
 
+  function closeFormModal() {
+    setFormOpen(false);
+    setFormStep(-1);
+    setConfirmEdit(false);
+    setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+    setError("");
+  }
+
+  function formNext() {
+    const step = FORM_STEPS[formStep];
+    if (step.name === "name" && !form.name.trim()) { setError("Food name is required."); return; }
+    if (step.name === "calories" && (form.calories === "" || isNaN(Number(form.calories)) || Number(form.calories) < 0)) { setError("Enter a valid calorie amount."); return; }
+    setError("");
+    if (confirmEdit) { setConfirmEdit(false); setFormStep(FORM_STEPS.length); return; }
+    setFormStep(s => s + 1);
+  }
+
+  function formBack() {
+    setError("");
+    if (confirmEdit) { setConfirmEdit(false); setFormStep(FORM_STEPS.length); return; }
+    if (formStep === 0) { closeFormModal(); } else { setFormStep(s => s - 1); }
+  }
+
   function handleAdd(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!form.name.trim()) {
       setError("Food name is required.");
       return;
@@ -679,7 +707,7 @@ export default function Nutrition() {
         serving_unit: form.serving_unit || "g",
       };
       setPlannedEntries((prev) => [...prev, entry]);
-      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+      closeFormModal();
       showToast("Added to plan", "#4f8ef7");
       return;
     }
@@ -706,7 +734,7 @@ export default function Nutrition() {
       setEntries(next);
       saveGuestEntries(next);
       showToast("Logged! Sign in to save permanently");
-      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+      closeFormModal();
       return;
     }
     requireAuth(async () => {
@@ -744,7 +772,7 @@ export default function Nutrition() {
         upsertDailyStatus(todayStr(), next, goals, u.id);
         showToast("Food logged successfully");
       }
-      setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+      closeFormModal();
     });
   }
 
@@ -1511,10 +1539,19 @@ export default function Nutrition() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <div ref={usdaRef} style={{ position: "relative", flex: 1 }}>
             <input
-              name="name"
-              placeholder={formOpen ? "Food name…" : "Search USDA food database…"}
-              value={form.name}
-              onChange={handleChange}
+              placeholder="Search USDA food database…"
+              value={usdaQuery}
+              onChange={(e) => {
+                const q = e.target.value;
+                setUsdaQuery(q);
+                clearTimeout(usdaDebounce.current);
+                if (q.trim().length >= 2) {
+                  usdaDebounce.current = setTimeout(() => searchUSDA(q.trim()), 400);
+                } else {
+                  setUsdaResults([]);
+                  setUsdaOpen(false);
+                }
+              }}
               style={inputStyle({ width: "100%", boxSizing: "border-box" })}
               autoComplete="off"
             />
@@ -1628,7 +1665,16 @@ export default function Nutrition() {
           </div>
           <button
             type="button"
-            onClick={() => setFormOpen((o) => !o)}
+            onClick={() => {
+              if (formOpen) {
+                closeFormModal();
+              } else {
+                setForm({ ...EMPTY_FORM, serving_unit: getLastUnit() });
+                setError("");
+                setFormOpen(true);
+                setFormStep(0);
+              }
+            }}
             style={{
               background: "#ff8c42",
               color: "#fff",
@@ -1803,137 +1849,9 @@ export default function Nutrition() {
           </div>
         )}
 
-        {formOpen && (
-          <form onSubmit={handleAdd} style={{ marginTop: 16 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  border: "1px solid #e0e0e0",
-                  borderRadius: 8,
-                  background: "#fafafa",
-                  padding: "9px 12px",
-                  flex: "2 1 120px",
-                }}
-              >
-                <input
-                  name="calories"
-                  type="number"
-                  placeholder="Calories"
-                  value={form.calories}
-                  onChange={handleChange}
-                  style={{ border: "none", background: "transparent", outline: "none", fontSize: 16, minWidth: 0, flex: 1 }}
-                />
-                <span style={{ color: "#aaa", fontSize: 13, marginLeft: 8, flexShrink: 0 }}>kcal</span>
-              </div>
-              {[
-                { name: "protein", label: "Protein" },
-                { name: "carbs", label: "Carbs" },
-                { name: "fat", label: "Fat" },
-                { name: "fiber", label: "Fiber" },
-                { name: "sugar", label: "Sugar" },
-              ].map(({ name, label }) => (
-                <div
-                  key={name}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: 8,
-                    background: "#fafafa",
-                    padding: "9px 12px",
-                    flex: "1 1 70px",
-                  }}
-                >
-                  <input
-                    name={name}
-                    type="number"
-                    min="0"
-                    step="any"
-                    placeholder={label}
-                    value={form[name]}
-                    onChange={handleChange}
-                    style={{ border: "none", background: "transparent", outline: "none", fontSize: 16, minWidth: 0, flex: 1 }}
-                  />
-                  <span style={{ color: "#aaa", fontSize: 13, marginLeft: 8, flexShrink: 0 }}>
-                    g{form[name] ? ` ${label}` : ""}
-                  </span>
-                </div>
-              ))}
-              <div style={{ display: "flex", flex: "1 1 50px", gap: 0 }}>
-                <input
-                  name="serving_amount"
-                  type="number"
-                  min="0"
-                  placeholder="Serving size"
-                  value={form.serving_amount}
-                  onChange={handleChange}
-                  style={inputStyle({ flex: 1, borderRadius: "8px 0 0 8px", borderRight: "none" })}
-                />
-                <select
-                  name="serving_unit"
-                  value={form.serving_unit}
-                  onChange={handleChange}
-                  style={{ ...inputStyle(), borderRadius: "0 8px 8px 0", padding: "9px 8px", cursor: "pointer" }}
-                >
-                  {SERVING_UNITS.map((u) => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {error && (
-              <p style={{ color: "#e05c5c", margin: "0 0 10px", fontSize: 13 }}>{error}</p>
-            )}
-            <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-              <button
-                type="submit"
-                style={{
-                  background: "#ff8c42",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "9px 22px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                + Add Entry
-              </button>
-              {(() => {
-                const alreadySaved = savedFoods.some(
-                  (f) => f.name.toLowerCase() === form.name.trim().toLowerCase(),
-                );
-                return (
-                  <button
-                    type="button"
-                    onClick={alreadySaved ? undefined : handleSaveToMyFoods}
-                    disabled={alreadySaved}
-                    style={{
-                      background: savedFeedback ? "#5cb85c" : "none",
-                      color: savedFeedback ? "#fff" : alreadySaved ? "#aaa" : "#888",
-                      border: "1px solid",
-                      borderColor: alreadySaved ? "#e0e0e0" : savedFeedback ? "#5cb85c" : "#e0e0e0",
-                      borderRadius: 8,
-                      padding: "8px 16px",
-                      cursor: alreadySaved ? "default" : "pointer",
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {alreadySaved ? "★ Already Saved" : savedFeedback ? "★ Saved!" : "☆ Save to My Food Library"}
-                  </button>
-                );
-              })()}
-            </div>
-          </form>
-        )}
-
         {myFoodsOpen && (
-          <div ref={libraryRef} style={{ background: "#f0f4ff", borderRadius: 10, marginTop: 14, padding: "14px 16px 0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div ref={libraryRef} style={{ background: "#f0f4ff", borderRadius: 10, marginTop: 14, padding: "14px 0 0" }}>
+            <div style={{ padding: "0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
                 My Food Library
                 <span style={{ fontSize: 12, fontWeight: 400, color: "#aaa", marginLeft: 6 }}>
@@ -1942,13 +1860,13 @@ export default function Nutrition() {
               </span>
             </div>
             {!libraryLoaded ? (
-              <div style={{ padding: "6px 0 16px" }}>
+              <div style={{ padding: "6px 16px 16px" }}>
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="skeleton-shimmer" style={{ height: 44, borderRadius: 8, marginBottom: 8 }} />
                 ))}
               </div>
             ) : libraryError ? (
-              <p style={{ color: "#e05c5c", fontSize: 13, padding: "12px 0 16px", margin: 0, textAlign: "center" }}>
+              <p style={{ color: "#e05c5c", fontSize: 13, padding: "12px 16px 16px", margin: 0, textAlign: "center" }}>
                 Unable to fetch food library — check your connection and try again.
               </p>
             ) : savedFoods.length === 0 ? (
@@ -1956,7 +1874,7 @@ export default function Nutrition() {
               style={{
                 textAlign: "center",
                 color: "#bbb",
-                padding: "20px 0",
+                padding: "20px 16px",
                 margin: 0,
                 fontSize: 14,
               }}
@@ -1966,7 +1884,7 @@ export default function Nutrition() {
             </p>
           ) : (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0, padding: "0 16px" }}>
                 <input
                   type="text"
                   value={myFoodsSearch}
@@ -2691,19 +2609,7 @@ export default function Nutrition() {
                 const isSelected = selectedEntryIds.has(entry.id);
                 return (
                   <div key={entry.id}
-                    onTouchStart={() => {
-                      longPressRef.current.triggered = false;
-                      clearTimeout(longPressRef.current.timer);
-                      longPressRef.current.timer = setTimeout(() => {
-                        longPressRef.current.triggered = true;
-                        setLogEntryMenu(entry);
-                      }, 500);
-                    }}
-                    onTouchEnd={() => clearTimeout(longPressRef.current.timer)}
-                    onTouchMove={() => clearTimeout(longPressRef.current.timer)}
-                    onContextMenu={(e) => e.preventDefault()}
                     onClick={() => {
-                      if (longPressRef.current.triggered) { longPressRef.current.triggered = false; return; }
                       if (selectionMode) { toggleEntrySelection(entry.id); return; }
                       setExpandedLogIds(prev => {
                         const next = new Set(prev);
@@ -2728,7 +2634,7 @@ export default function Nutrition() {
                       </div>
                       {!selectionMode && isExpanded && (
                         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 10 }}>
                             {visibleMacroList.map((m) => (
                               <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
                                 <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
@@ -2739,6 +2645,18 @@ export default function Nutrition() {
                                 </span>
                               </div>
                             ))}
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }} onClick={e => e.stopPropagation()}>
+                            {!savedFoods.some(f => f.name.toLowerCase() === entry.food_name.toLowerCase()) && (
+                              <button
+                                onClick={() => handleSaveEntryToMyFoods(entry)}
+                                style={{ flex: 1, padding: "7px 0", background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 8, color: "#4f8ef7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                              >☆ Save to Library</button>
+                            )}
+                            <button
+                              onClick={() => { if (window.confirm(`Remove "${entry.food_name}" from today's log?`)) handleDelete(entry.id); }}
+                              style={{ flex: 1, padding: "7px 0", background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 8, color: "#e05c5c", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                            >Delete</button>
                           </div>
                         </div>
                       )}
@@ -3259,6 +3177,166 @@ export default function Nutrition() {
           </div>
         </div>
       )}
+
+      {/* Manual entry wizard modal */}
+      {formOpen && formStep >= 0 && (() => {
+        const isConfirm = formStep === FORM_STEPS.length;
+        const step = !isConfirm ? FORM_STEPS[formStep] : null;
+        const alreadySaved = savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase());
+
+        return (
+          <div
+            onMouseDown={(e) => { if (e.target === e.currentTarget) closeFormModal(); }}
+            style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          >
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 18, padding: "28px 24px 24px", width: "100%", maxWidth: 400 }}
+            >
+              {/* Progress bar */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 28 }}>
+                {FORM_STEPS.map((_, i) => (
+                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i < formStep || isConfirm ? "#ff8c42" : i === formStep ? "#ffb380" : "#f0f0f0", transition: "background 0.2s" }} />
+                ))}
+              </div>
+
+              {!isConfirm ? (
+                <>
+                  <p style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>{step.label}</p>
+                  {step.optional && (
+                    <p style={{ fontSize: 13, color: "#bbb", margin: "0 0 20px" }}>Optional — press Enter to skip</p>
+                  )}
+                  {!step.optional && <div style={{ marginBottom: 20 }} />}
+
+                  {step.type === "serving" ? (
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        key={formStep}
+                        autoFocus
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="Amount"
+                        value={form.serving_amount}
+                        onChange={(e) => setForm(f => ({ ...f, serving_amount: e.target.value }))}
+                        onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                        onKeyDown={(e) => { if (e.key === "Enter") formNext(); }}
+                        style={{ flex: 1, padding: "14px 16px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 20, outline: "none" }}
+                      />
+                      <select
+                        value={form.serving_unit}
+                        onChange={(e) => {
+                          setForm(f => ({ ...f, serving_unit: e.target.value }));
+                          localStorage.setItem(LAST_UNIT_KEY, e.target.value);
+                        }}
+                        style={{ padding: "14px 12px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 16, outline: "none", background: "#fafafa", cursor: "pointer" }}
+                      >
+                        {SERVING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <input
+                        key={formStep}
+                        autoFocus
+                        type={step.type}
+                        name={step.name}
+                        placeholder={step.placeholder}
+                        value={form[step.name]}
+                        onChange={handleChange}
+                        onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                        onKeyDown={(e) => { if (e.key === "Enter") formNext(); }}
+                        style={{ flex: 1, padding: "14px 16px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 20, outline: "none" }}
+                      />
+                      {step.unit && <span style={{ fontSize: 15, color: "#aaa", flexShrink: 0 }}>{step.unit}</span>}
+                    </div>
+                  )}
+
+                  {error && <p style={{ color: "#e05c5c", fontSize: 13, margin: "4px 0 0" }}>{error}</p>}
+
+                  <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                    {confirmEdit ? (
+                      <button onClick={formBack} style={{ flex: 1, padding: "11px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                        ← Back to Review
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={formBack} style={{ flex: 1, padding: "11px 0", border: "1px solid #e0e0e0", borderRadius: 10, background: "none", fontSize: 14, cursor: "pointer", color: "#888" }}>
+                          ← Back
+                        </button>
+                        <button onClick={formNext} style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                          {formStep === FORM_STEPS.length - 1 ? "Review →" : "Next →"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setConfirmEdit(true); setFormStep(0); }}
+                    onMouseEnter={() => setConfirmHover("name")}
+                    onMouseLeave={() => setConfirmHover(null)}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: confirmHover === "name" ? "#f7f7fb" : "none", border: `1px solid ${confirmHover === "name" ? "#e0e0e0" : "transparent"}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", marginBottom: 12 }}
+                  >
+                    <div style={{ fontSize: 11, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>Food name</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#333" }}>{form.name}</div>
+                  </button>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                    {MACROS.map((m, i) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => { setConfirmEdit(true); setFormStep(i + 1); }}
+                        onMouseEnter={() => setConfirmHover(m.key)}
+                        onMouseLeave={() => setConfirmHover(null)}
+                        style={{ flex: "1 1 80px", background: confirmHover === m.key ? "#eef4ff" : "#f7f7fb", border: `1px solid ${confirmHover === m.key ? "#93c5fd" : "#e8e8e8"}`, borderRadius: 10, padding: "10px 8px", cursor: "pointer", textAlign: "center", transition: "background 0.15s, border-color 0.15s" }}
+                      >
+                        <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 3 }}>{m.label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{form[m.key] || "0"}</div>
+                        <div style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setConfirmEdit(true); setFormStep(FORM_STEPS.length - 1); }}
+                    onMouseEnter={() => setConfirmHover("serving")}
+                    onMouseLeave={() => setConfirmHover(null)}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: confirmHover === "serving" ? "#f7f7fb" : "none", border: `1px solid ${confirmHover === "serving" ? "#e0e0e0" : "transparent"}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer", marginBottom: 16 }}
+                  >
+                    <div style={{ fontSize: 11, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>Serving size</div>
+                    <div style={{ fontSize: 14, color: form.serving_amount ? "#555" : "#bbb" }}>
+                      {form.serving_amount ? fmtServing(Number(form.serving_amount), form.serving_unit) : "Not set"}
+                    </div>
+                  </button>
+
+                  {error && <p style={{ color: "#e05c5c", fontSize: 13, margin: "0 0 8px" }}>{error}</p>}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <button
+                      onClick={() => handleAdd(null)}
+                      style={{ padding: "12px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      + Add to Log
+                    </button>
+                    <button
+                      onClick={alreadySaved ? undefined : handleSaveToMyFoods}
+                      disabled={alreadySaved}
+                      style={{ padding: "12px 0", border: "1px solid", borderColor: alreadySaved ? "#e0e0e0" : savedFeedback ? "#5cb85c" : "#e0e0e0", borderRadius: 10, background: savedFeedback ? "#5cb85c" : "none", color: savedFeedback ? "#fff" : alreadySaved ? "#bbb" : "#888", fontSize: 13, fontWeight: 600, cursor: alreadySaved ? "default" : "pointer" }}
+                    >
+                      {alreadySaved ? "★ Already in Library" : savedFeedback ? "★ Saved!" : "☆ Save to My Food Library"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Logged toast */}
       <div style={{
