@@ -2783,7 +2783,7 @@ export default function Nutrition() {
                       )}
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         <button
-                          onClick={() => markPlanItemComplete(item)}
+                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
                           style={{ flex: 1, padding: "7px 0", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                         >✓ Mark as Complete</button>
                         <button
@@ -2791,7 +2791,7 @@ export default function Nutrition() {
                           style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}
                         ><MdEdit size={16} /></button>
                         <button
-                          onClick={() => removePlanItem(item.id)}
+                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
                           style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
                         >✕</button>
                       </div>
@@ -2931,12 +2931,17 @@ export default function Nutrition() {
                     <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <button
-                          onClick={() => markPlanItemComplete(item)}
+                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
                           style={{ background: "#4f8ef7", border: "none", borderRadius: 6, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, padding: "5px 10px" }}
                           title="Mark as Complete"
                         >✓</button>
                         <button
-                          onClick={() => removePlanItem(item.id)}
+                          onClick={() => editPlanItem(item.id)}
+                          style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", display: "flex", alignItems: "center" }}
+                          title="Edit serving size"
+                        ><MdEdit size={16} /></button>
+                        <button
+                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
                           style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px" }}
                           title="Remove from plan"
                         >✕</button>
@@ -2965,6 +2970,7 @@ export default function Nutrition() {
 
       {planExitOpen && (() => {
         const logAll = async () => {
+          showToast("Logging…", "#888");
           if (user) {
             const { data: { user: u } } = await supabase.auth.getUser();
             const toInsert = plannedEntries.map((e) => ({
@@ -2991,6 +2997,7 @@ export default function Nutrition() {
         };
         const discard = () => { setPlannedEntries([]); setPlanMode(false); setPlanExitOpen(false); };
         const setPlan = async () => {
+          showToast("Saving plan…", "#888");
           setPlannedEntries([]);
           setPlanMode(false);
           setPlanExitOpen(false);
