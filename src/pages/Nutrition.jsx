@@ -163,6 +163,37 @@ function fmtServing(amount, unit) {
 function tomorrowStr() {
   return dateStr(1);
 }
+function parseLoggedTime(str) {
+  if (!str) return 0;
+  const [time, period] = str.split(" ");
+  const [h, m] = time.split(":").map(Number);
+  return ((h % 12) + (period === "PM" ? 12 : 0)) * 60 + m;
+}
+
+function inputStyle(extra = {}) {
+  return {
+    padding: "9px 12px",
+    border: "1px solid #e0e0e0",
+    borderRadius: 8,
+    fontSize: 16,
+    outline: "none",
+    background: "#fafafa",
+    minWidth: 0,
+    ...extra,
+  };
+}
+
+function thStyle(extra = {}) {
+  return {
+    padding: "10px 16px",
+    fontWeight: 600,
+    fontSize: 13,
+    color: "#555",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    ...extra,
+  };
+}
 
 export default function Nutrition() {
   const { user, requireAuth, loading } = useAuth();
@@ -195,6 +226,7 @@ export default function Nutrition() {
   const [pinnedFood, setPinnedFood] = useState(null);
   const [pinnedLibraryFood, setPinnedLibraryFood] = useState(null);
   const [editingLibraryFood, setEditingLibraryFood] = useState(null);
+  const [editingPlanItem, setEditingPlanItem] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [compareFood, setCompareFood] = useState(null);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 767px)").matches);
@@ -205,6 +237,10 @@ export default function Nutrition() {
   const [isFromBarcode, setIsFromBarcode] = useState(false);
   const [barcodeUnit, setBarcodeUnit] = useState("g");
   const [logEntryMenu, setLogEntryMenu] = useState(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState(new Set());
+  const [combineModalOpen, setCombineModalOpen] = useState(false);
+  const [combineName, setCombineName] = useState("");
   const [expandedLogIds, setExpandedLogIds] = useState(new Set());
   const [planMode, setPlanMode] = useState(false);
   const [plannedEntries, setPlannedEntries] = useState([]);
@@ -538,6 +574,7 @@ export default function Nutrition() {
 
   function handleAddFromUsda() {
     if (!selectedUsdaFood) return;
+    showToast("Logging food...", "#e0ba21");
     let scale, unit;
     if (isFromBarcode && unitFactor(barcodeUnit) != null && selectedUsdaFood.servingSize) {
       const origFactor = unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ?? 1;
@@ -645,6 +682,9 @@ export default function Nutrition() {
       showToast("Added to plan", "#4f8ef7");
       return;
     }
+
+    showToast("Logging food...", "#e0ba21");
+
     if (!user) {
       const now = new Date();
       const entry = {
@@ -821,6 +861,9 @@ export default function Nutrition() {
       showToast("Added to plan", "#4f8ef7");
       return;
     }
+
+    showToast("Logging food...", "#e0ba21");
+
     requireAuth(async () => {
       const {
         data: { user: u },
@@ -979,7 +1022,110 @@ export default function Nutrition() {
     setEditingLibraryFood(null);
   }
 
+  function planEditScale() {
+    if (!editingPlanItem) return 1;
+    const origAmount = Number(editingPlanItem.serving_amount) || 1;
+    const newAmount = Number(editForm.serving_amount) || 0;
+    const origUnit = editingPlanItem.serving_unit || "g";
+    const newUnit = editForm.serving_unit || "g";
+    if (UNIT_TO_G[origUnit] && UNIT_TO_G[newUnit]) {
+      return (newAmount * UNIT_TO_G[newUnit]) / (origAmount * UNIT_TO_G[origUnit]);
+    }
+    return origAmount > 0 ? newAmount / origAmount : newAmount;
+  }
+
+  async function handleEditPlanItemSave() {
+    if (!editingPlanItem) return;
+    const scale = planEditScale();
+    const updated = {
+      food_name: editingPlanItem.food_name,
+      calories: Math.round(editingPlanItem.calories * scale),
+      protein: Math.round(editingPlanItem.protein * scale * 10) / 10,
+      carbs: Math.round(editingPlanItem.carbs * scale * 10) / 10,
+      fat: Math.round(editingPlanItem.fat * scale * 10) / 10,
+      fiber: Math.round(editingPlanItem.fiber * scale * 10) / 10,
+      sugar: Math.round(editingPlanItem.sugar * scale * 10) / 10,
+      serving_amount: Number(editForm.serving_amount) || null,
+      serving_unit: editForm.serving_unit || "g",
+    };
+    setDayPlanItems(prev => prev.map(i => i.id === editingPlanItem.id ? { ...i, ...updated } : i));
+    if (user) {
+      await supabase.from("nutrition_logs").update(updated).eq("id", editingPlanItem.id);
+    } else {
+      saveGuestPlan(dayPlanItems.map(i => i.id === editingPlanItem.id ? { ...i, ...updated } : i));
+    }
+    setEditingPlanItem(null);
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedEntryIds(new Set());
+  }
+
+  function toggleEntrySelection(id) {
+    setSelectedEntryIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function handleDeleteSelected() {
+    const ids = [...selectedEntryIds];
+    const next = entries.filter(e => !selectedEntryIds.has(e.id));
+    if (!user) {
+      setEntries(next);
+      saveGuestEntries(next);
+    } else {
+      await Promise.all(ids.map(id => supabase.from("nutrition_logs").delete().eq("id", id)));
+      setEntries(next);
+      upsertDailyStatus(todayStr(), next, goals, user.id);
+    }
+    exitSelectionMode();
+    showToast(`${ids.length} ${ids.length === 1 ? "entry" : "entries"} deleted`, "#ef4444");
+  }
+
+  async function handleCombineSelected() {
+    const selected = entries.filter(e => selectedEntryIds.has(e.id));
+    const ids = [...selectedEntryIds];
+    const combined = MACROS.reduce((acc, m) => {
+      acc[m.key] = m.key === "calories"
+        ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
+        : Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) / 10;
+      return acc;
+    }, {});
+    const now = new Date();
+    const entry = {
+      logged_at: todayStr(),
+      logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+      food_name: combineName.trim() || "Combined entry",
+      ...combined,
+      serving_amount: null,
+      serving_unit: "×",
+    };
+    if (!user) {
+      const remaining = entries.filter(e => !selectedEntryIds.has(e.id));
+      const final = [...remaining, { ...entry, id: "guest_" + Date.now() }];
+      setEntries(final);
+      saveGuestEntries(final);
+    } else {
+      await Promise.all(ids.map(id => supabase.from("nutrition_logs").delete().eq("id", id)));
+      const { data } = await supabase.from("nutrition_logs").insert({ ...entry, user_id: user.id }).select().single();
+      if (data) {
+        const remaining = entries.filter(e => !selectedEntryIds.has(e.id));
+        const final = [...remaining, data];
+        setEntries(final);
+        upsertDailyStatus(todayStr(), final, goals, user.id);
+      }
+    }
+    setCombineModalOpen(false);
+    setCombineName("");
+    exitSelectionMode();
+    showToast("Entries combined!", "#5cb85c");
+  }
+
   async function markPlanItemComplete(item) {
+    showToast("Logging…", "#888");
     const now = new Date();
     const loggedTime = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
     const next = dayPlanItems.filter(i => i.id !== item.id);
@@ -1002,6 +1148,16 @@ export default function Nutrition() {
       saveGuestPlan(next);
     }
     showToast("Marked as complete!", "#5cb85c");
+  }
+
+  async function editPlanItem(id) {
+    const item = dayPlanItems.find(i => i.id === id);
+    if (!item) return;
+    setEditForm({
+      serving_amount: String(item.serving_amount ?? ""),
+      serving_unit: item.serving_unit || "g",
+    });
+    setEditingPlanItem(item);
   }
 
   async function removePlanItem(id) {
@@ -2280,6 +2436,151 @@ export default function Nutrition() {
         </div>
       )}
 
+      {/* Combine entries modal */}
+      {combineModalOpen && (() => {
+        const selected = entries.filter(e => selectedEntryIds.has(e.id));
+        const preview = MACROS.reduce((acc, m) => {
+          acc[m.key] = m.key === "calories"
+            ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
+            : Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) / 10;
+          return acc;
+        }, {});
+        return (
+          <div
+            onMouseDown={() => setCombineModalOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          >
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380 }}
+            >
+              <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16 }}>Combine {selectedEntryIds.size} entries</p>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: "#aaa" }}>Give the combined entry a name.</p>
+              <input
+                type="text"
+                placeholder="Combined entry name…"
+                value={combineName}
+                onChange={(e) => setCombineName(e.target.value)}
+                onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                autoFocus
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box", marginBottom: 16 }}
+              />
+              <div style={{ background: "#f7f7fb", borderRadius: 10, padding: "10px 14px", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {visibleMacroList.map((m) => (
+                  <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>{m.label}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: m.color }}>{preview[m.key]}</span>
+                    <span style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => setCombineModalOpen(false)}
+                  style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCombineSelected}
+                  style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Combine
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Edit plan item modal */}
+      {editingPlanItem && (
+        <div
+          onMouseDown={() => setEditingPlanItem(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+          >
+            <div style={{ marginBottom: 18 }}>
+              <span style={{ fontWeight: 700, fontSize: 16, color: "#4f8ef7" }}>{editingPlanItem?.food_name}</span>
+            </div>
+
+            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>
+              {editingPlanItem?.serving_unit === "×" ? "Servings" : "Serving size"}
+            </label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={editForm.serving_amount ?? ""}
+                onChange={(e) => setEditForm((f) => ({ ...f, serving_amount: e.target.value }))}
+                onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                style={{ flex: 1, padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none" }}
+              />
+              {editingPlanItem?.serving_unit === "×" ? (
+                <span style={{ display: "flex", alignItems: "center", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, color: "#888", background: "#fafafa" }}>
+                  servings
+                </span>
+              ) : (
+                <select
+                  value={editForm.serving_unit ?? "g"}
+                  onChange={(e) => {
+                    const newUnit = e.target.value;
+                    const oldUnit = editForm.serving_unit || "g";
+                    const current = Number(editForm.serving_amount) || 0;
+                    let converted = current;
+                    if (UNIT_TO_G[oldUnit] && UNIT_TO_G[newUnit]) {
+                      converted = Math.round(current * UNIT_TO_G[oldUnit] / UNIT_TO_G[newUnit] * 100) / 100;
+                    } else if (UNIT_TO_ML[oldUnit] && UNIT_TO_ML[newUnit]) {
+                      converted = Math.round(current * UNIT_TO_ML[oldUnit] / UNIT_TO_ML[newUnit] * 100) / 100;
+                    }
+                    setEditForm((f) => ({ ...f, serving_unit: newUnit, serving_amount: String(converted) }));
+                  }}
+                  style={{ padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, outline: "none", background: "#fafafa", cursor: "pointer" }}
+                >
+                  {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div style={{ background: "#f7f7fb", borderRadius: 10, padding: "12px 14px", marginBottom: 20 }}>
+              <div style={{ display: "flex", gap: 16 }}>
+                {visibleMacroList.map((m) => {
+                  const scaled = editingPlanItem
+                    ? Math.round((editingPlanItem[m.key] || 0) * planEditScale() * (m.key === "calories" ? 1 : 10)) / (m.key === "calories" ? 1 : 10)
+                    : 0;
+                  return (
+                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 2, whiteSpace: "nowrap" }}>{m.label}</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{scaled}</span>
+                      <span style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => setEditingPlanItem(null)}
+                style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditPlanItemSave}
+                style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Log Table */}
       <div
       id="logTable"
@@ -2309,22 +2610,57 @@ export default function Nutrition() {
             )}
           </h3>
           {entries.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              style={{
-                background: "none",
-                border: "1px solid #ddd",
-                borderRadius: 6,
-                padding: "5px 12px",
-                cursor: "pointer",
-                fontSize: 12,
-                color: "#888",
-              }}
-            >
-              Clear All
-            </button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {selectionMode ? (
+                <>
+                  <button
+                    onClick={() => setSelectedEntryIds(
+                      selectedEntryIds.size === entries.length ? new Set() : new Set(entries.map(e => e.id))
+                    )}
+                    style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#555" }}
+                  >
+                    {selectedEntryIds.size === entries.length ? "Deselect All" : "Select All"}
+                  </button>
+                  <button
+                    onClick={exitSelectionMode}
+                    style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#888" }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setSelectionMode(true)}
+                  style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#555" }}
+                >
+                  Select
+                </button>
+              )}
+            </div>
           )}
         </div>
+
+        {selectionMode && selectedEntryIds.size > 0 && (
+          <div style={{ display: "flex", gap: 8, padding: "10px 20px", borderBottom: "1px solid #f0f0f0", background: "#fafafa" }}>
+            <span style={{ fontSize: 13, color: "#888", marginRight: "auto", alignSelf: "center" }}>
+              {selectedEntryIds.size} selected
+            </span>
+            <button
+              onClick={handleDeleteSelected}
+              style={{ background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#e05c5c" }}
+            >
+              Delete
+            </button>
+            {selectedEntryIds.size >= 2 && (
+              <button
+                onClick={() => setCombineModalOpen(true)}
+                style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#4f8ef7" }}
+              >
+                Combine
+              </button>
+            )}
+          </div>
+        )}
 
         {!entriesLoaded ? (
           <div style={{ padding: "16px 20px" }}>
@@ -2351,43 +2687,53 @@ export default function Nutrition() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {sortedEntries.map((entry) => {
                 const isExpanded = expandedLogIds.has(entry.id);
+                const isSelected = selectedEntryIds.has(entry.id);
                 return (
                   <div key={entry.id}
-                    onClick={() => setExpandedLogIds(prev => {
-                      const next = new Set(prev);
-                      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
-                      return next;
-                    })}
-                    style={{ background: "#fafafa", border: "1px solid #f0f0f0", borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
-                    {/* Collapsed: food name top-left, time top-right; serving bottom-left, calories bottom-right */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, minWidth: 0, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name}</span>
-                      {entry.logged_time && <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>{entry.logged_time}</span>}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
-                      <span style={{ fontSize: 12, color: "#aaa" }}>{entry.serving_amount ? fmtServing(entry.serving_amount, entry.serving_unit) : ""}</span>
-                      <span style={{ fontSize: 13, color: "#ff8c42", fontWeight: 700, flexShrink: 0 }}>{entry.calories} kcal</span>
-                    </div>
-                    {isExpanded && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
-                          {visibleMacroList.map((m) => (
-                            <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
-                              <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
-                                {{ calories: "Calories", protein: "Protein", carbs: "Carbs", fat: "Fat", fiber: "Fiber", sugar: "Sugar" }[m.key]}
-                              </span>
-                              <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
-                                {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
-                              </span>
-                            </div>
-                          ))}
-                          <button
-                            onClick={e => { e.stopPropagation(); setLogEntryMenu(entry); }}
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 20, lineHeight: 1, padding: "0 2px", marginLeft: "auto", alignSelf: "flex-start" }}
-                          >⋮</button>
-                        </div>
+                    onClick={() => {
+                      if (selectionMode) { toggleEntrySelection(entry.id); return; }
+                      setExpandedLogIds(prev => {
+                        const next = new Set(prev);
+                        next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                        return next;
+                      });
+                    }}
+                    style={{ background: isSelected ? "#eff6ff" : "#fafafa", border: `1px solid ${isSelected ? "#93c5fd" : "#f0f0f0"}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    {selectionMode && (
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`, background: isSelected ? "#4f8ef7" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                        {isSelected && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
                       </div>
                     )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, minWidth: 0, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name}</span>
+                        {entry.logged_time && <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>{entry.logged_time}</span>}
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
+                        <span style={{ fontSize: 12, color: "#aaa" }}>{entry.serving_amount ? fmtServing(entry.serving_amount, entry.serving_unit) : ""}</span>
+                        <span style={{ fontSize: 13, color: "#ff8c42", fontWeight: 700, flexShrink: 0 }}>{entry.calories} kcal</span>
+                      </div>
+                      {!selectionMode && isExpanded && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+                            {visibleMacroList.map((m) => (
+                              <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
+                                <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
+                                  {{ calories: "Calories", protein: "Protein", carbs: "Carbs", fat: "Fat", fiber: "Fiber", sugar: "Sugar" }[m.key]}
+                                </span>
+                                <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
+                                  {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
+                                </span>
+                              </div>
+                            ))}
+                            <button
+                              onClick={e => { e.stopPropagation(); setLogEntryMenu(entry); }}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 20, lineHeight: 1, padding: "0 2px", marginLeft: "auto", alignSelf: "flex-start" }}
+                            >⋮</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -2437,11 +2783,15 @@ export default function Nutrition() {
                       )}
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         <button
-                          onClick={() => markPlanItemComplete(item)}
+                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
                           style={{ flex: 1, padding: "7px 0", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                         >✓ Mark as Complete</button>
                         <button
-                          onClick={() => removePlanItem(item.id)}
+                          onClick={() => editPlanItem(item.id)}
+                          style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}
+                        ><MdEdit size={16} /></button>
+                        <button
+                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
                           style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
                         >✕</button>
                       </div>
@@ -2476,6 +2826,7 @@ export default function Nutrition() {
             >
               <thead>
                 <tr style={{ background: "#fafafa" }}>
+                  {selectionMode && <th style={thStyle({ width: 36 })} />}
                   <th style={thStyle({ textAlign: "left" })}>Food</th>
                   <th style={thStyle({ color: "#aaa" })}>Serving</th>
                   {visibleMacroList.map((m) => (
@@ -2490,8 +2841,21 @@ export default function Nutrition() {
                 </tr>
               </thead>
               <tbody>
-                {sortedEntries.map((entry, i) => (
-                  <tr key={entry.id} style={{ borderTop: "1px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                {sortedEntries.map((entry, i) => {
+                  const isSelected = selectedEntryIds.has(entry.id);
+                  return (
+                  <tr
+                    key={entry.id}
+                    onClick={selectionMode ? () => toggleEntrySelection(entry.id) : undefined}
+                    style={{ borderTop: "1px solid #f0f0f0", background: isSelected ? "#eff6ff" : i % 2 === 0 ? "#fff" : "#fafafa", cursor: selectionMode ? "pointer" : "default" }}
+                  >
+                    {selectionMode && (
+                      <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                        <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`, background: isSelected ? "#4f8ef7" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+                          {isSelected && <span style={{ color: "#fff", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                        </div>
+                      </td>
+                    )}
                     <td style={{ padding: "10px 16px", fontWeight: 500 }}>{entry.food_name}</td>
                     <td style={{ padding: "10px 16px", textAlign: "center", color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>
                       {fmtServing(entry.serving_amount, entry.serving_unit)}
@@ -2521,7 +2885,8 @@ export default function Nutrition() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {planMode && plannedEntries.map((entry) => (
                   <tr key={entry.id} style={{ borderTop: "1px solid #dbeafe", background: "#eff6ff" }}>
                     <td style={{ padding: "10px 16px", fontWeight: 500, color: "#1d4ed8" }}>{entry.food_name}</td>
@@ -2566,12 +2931,17 @@ export default function Nutrition() {
                     <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <button
-                          onClick={() => markPlanItemComplete(item)}
+                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
                           style={{ background: "#4f8ef7", border: "none", borderRadius: 6, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, padding: "5px 10px" }}
                           title="Mark as Complete"
                         >✓</button>
                         <button
-                          onClick={() => removePlanItem(item.id)}
+                          onClick={() => editPlanItem(item.id)}
+                          style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", display: "flex", alignItems: "center" }}
+                          title="Edit serving size"
+                        ><MdEdit size={16} /></button>
+                        <button
+                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
                           style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px" }}
                           title="Remove from plan"
                         >✕</button>
@@ -2600,6 +2970,7 @@ export default function Nutrition() {
 
       {planExitOpen && (() => {
         const logAll = async () => {
+          showToast("Logging…", "#888");
           if (user) {
             const { data: { user: u } } = await supabase.auth.getUser();
             const toInsert = plannedEntries.map((e) => ({
@@ -2626,6 +2997,7 @@ export default function Nutrition() {
         };
         const discard = () => { setPlannedEntries([]); setPlanMode(false); setPlanExitOpen(false); };
         const setPlan = async () => {
+          showToast("Saving plan…", "#888");
           setPlannedEntries([]);
           setPlanMode(false);
           setPlanExitOpen(false);
@@ -2906,34 +3278,3 @@ export default function Nutrition() {
   );
 }
 
-function parseLoggedTime(str) {
-  if (!str) return 0;
-  const [time, period] = str.split(" ");
-  const [h, m] = time.split(":").map(Number);
-  return ((h % 12) + (period === "PM" ? 12 : 0)) * 60 + m;
-}
-
-function inputStyle(extra = {}) {
-  return {
-    padding: "9px 12px",
-    border: "1px solid #e0e0e0",
-    borderRadius: 8,
-    fontSize: 16,
-    outline: "none",
-    background: "#fafafa",
-    minWidth: 0,
-    ...extra,
-  };
-}
-
-function thStyle(extra = {}) {
-  return {
-    padding: "10px 16px",
-    fontWeight: 600,
-    fontSize: 13,
-    color: "#555",
-    textAlign: "center",
-    whiteSpace: "nowrap",
-    ...extra,
-  };
-}
