@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { LuCalendar, LuScanLine } from "react-icons/lu";
-import { MdEdit, MdKeyboardArrowUp, MdKeyboardArrowDown, MdDeleteOutline } from "react-icons/md";
+import {
+  MdEdit,
+  MdKeyboardArrowUp,
+  MdKeyboardArrowDown,
+  MdDeleteOutline,
+} from "react-icons/md";
 import BarcodeScanner from "../components/BarcodeScanner";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -21,13 +26,21 @@ function loadGuestEntries() {
     const raw = localStorage.getItem(GUEST_LOG_KEY);
     if (!raw) return [];
     const { date, entries } = JSON.parse(raw);
-    if (date !== todayStr()) { localStorage.removeItem(GUEST_LOG_KEY); return []; }
+    if (date !== todayStr()) {
+      localStorage.removeItem(GUEST_LOG_KEY);
+      return [];
+    }
     return entries || [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 function saveGuestEntries(entries) {
-  localStorage.setItem(GUEST_LOG_KEY, JSON.stringify({ date: todayStr(), entries }));
+  localStorage.setItem(
+    GUEST_LOG_KEY,
+    JSON.stringify({ date: todayStr(), entries }),
+  );
 }
 
 function clearGuestEntries() {
@@ -40,26 +53,34 @@ function loadGuestPlan() {
     const raw = localStorage.getItem(GUEST_PLAN_KEY);
     if (!raw) return [];
     const { date, items } = JSON.parse(raw);
-    if (date !== todayStr()) { localStorage.removeItem(GUEST_PLAN_KEY); return []; }
+    if (date !== todayStr()) {
+      localStorage.removeItem(GUEST_PLAN_KEY);
+      return [];
+    }
     return items || [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 function saveGuestPlan(items) {
-  localStorage.setItem(GUEST_PLAN_KEY, JSON.stringify({ date: todayStr(), items }));
+  localStorage.setItem(
+    GUEST_PLAN_KEY,
+    JSON.stringify({ date: todayStr(), items }),
+  );
 }
 
 const SERVING_UNITS = ["g", "oz", "fl oz", "ml", "lb", "cup", "tbsp", "tsp"];
-const UNIT_TO_G  = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
+const UNIT_TO_G = { g: 1, oz: 28.3495, lb: 453.592, kg: 1000 };
 const UNIT_TO_ML = { ml: 1, "fl oz": 29.5735, l: 1000 };
 const unitFactor = (u) => UNIT_TO_G[u] ?? UNIT_TO_ML[u] ?? null;
 const LAST_UNIT_KEY = "rir0_last_serving_unit";
 const getLastUnit = () => localStorage.getItem(LAST_UNIT_KEY) || "g";
 
 const WEIGH_FREQ_OPTIONS = [
-  { value: "daily",    days: 1  },
-  { value: "3x_week", days: 3  },
-  { value: "weekly",  days: 7  },
-  { value: "biweekly",days: 14 },
+  { value: "daily", days: 1 },
+  { value: "3x_week", days: 3 },
+  { value: "weekly", days: 7 },
+  { value: "biweekly", days: 14 },
 ];
 function addDays(dateStr, n) {
   const d = new Date(dateStr + "T00:00:00");
@@ -100,18 +121,75 @@ const USDA_UNIT_MAP = {
 };
 
 const MACROS = [
-  { key: "calories", minKey: "calories_min", dirKey: "calories_dir", label: "Calories", unit: "kcal", color: "#ff8c42", defaultDir: "below" },
-  { key: "protein",  minKey: "protein_min",  dirKey: "protein_dir",  label: "Protein",  unit: "g",    color: "#4f8ef7", defaultDir: "above" },
-  { key: "carbs",    minKey: "carbs_min",    dirKey: "carbs_dir",    label: "Carbs",    unit: "g",    color: "#f7c948", defaultDir: "below" },
-  { key: "fat",      minKey: "fat_min",      dirKey: "fat_dir",      label: "Fat",      unit: "g",    color: "#e05c5c", defaultDir: "below" },
-  { key: "fiber",    minKey: "fiber_min",    dirKey: "fiber_dir",    label: "Fiber",    unit: "g",    color: "#5cb85c", defaultDir: "above" },
-  { key: "sugar",    minKey: "sugar_min",    dirKey: "sugar_dir",    label: "Sugar",    unit: "g",    color: "#c87dd4", defaultDir: "below" },
+  {
+    key: "calories",
+    minKey: "calories_min",
+    dirKey: "calories_dir",
+    label: "Calories",
+    unit: "kcal",
+    color: "#ff8c42",
+    defaultDir: "below",
+  },
+  {
+    key: "protein",
+    minKey: "protein_min",
+    dirKey: "protein_dir",
+    label: "Protein",
+    unit: "g",
+    color: "#4f8ef7",
+    defaultDir: "above",
+  },
+  {
+    key: "carbs",
+    minKey: "carbs_min",
+    dirKey: "carbs_dir",
+    label: "Carbs",
+    unit: "g",
+    color: "#f7c948",
+    defaultDir: "below",
+  },
+  {
+    key: "fat",
+    minKey: "fat_min",
+    dirKey: "fat_dir",
+    label: "Fat",
+    unit: "g",
+    color: "#e05c5c",
+    defaultDir: "below",
+  },
+  {
+    key: "fiber",
+    minKey: "fiber_min",
+    dirKey: "fiber_dir",
+    label: "Fiber",
+    unit: "g",
+    color: "#5cb85c",
+    defaultDir: "above",
+  },
+  {
+    key: "sugar",
+    minKey: "sugar_min",
+    dirKey: "sugar_dir",
+    label: "Sugar",
+    unit: "g",
+    color: "#c87dd4",
+    defaultDir: "below",
+  },
 ];
 
 const DEFAULT_GOALS = {
-  calories: 2000, protein: 150, fat: 65, carbs: 250, fiber: 25, sugar: 50,
-  calories_dir: "below", protein_dir: "above", carbs_dir: "below",
-  fat_dir: "below", fiber_dir: "above", sugar_dir: "below",
+  calories: 2000,
+  protein: 150,
+  fat: 65,
+  carbs: 250,
+  fiber: 25,
+  sugar: 50,
+  calories_dir: "below",
+  protein_dir: "above",
+  carbs_dir: "below",
+  fat_dir: "below",
+  fiber_dir: "above",
+  sugar_dir: "below",
 };
 
 function checkGoalsMet(totals, goals) {
@@ -134,15 +212,17 @@ async function upsertDailyStatus(date, dayEntries, currentGoals, userId) {
   }, {});
   const met = checkGoalsMet(totals, currentGoals);
   const snapshot = MACROS.reduce((acc, m) => {
-    acc[m.key]       = currentGoals[m.key]    ?? null;
-    acc[m.minKey]    = currentGoals[m.minKey] ?? null;
-    acc[m.dirKey]    = currentGoals[m.dirKey] ?? m.defaultDir;
+    acc[m.key] = currentGoals[m.key] ?? null;
+    acc[m.minKey] = currentGoals[m.minKey] ?? null;
+    acc[m.dirKey] = currentGoals[m.dirKey] ?? m.defaultDir;
     return acc;
   }, {});
-  await supabase.from("daily_goal_status").upsert(
-    { user_id: userId, date, met, goals_snapshot: snapshot },
-    { onConflict: "user_id,date" }
-  );
+  await supabase
+    .from("daily_goal_status")
+    .upsert(
+      { user_id: userId, date, met, goals_snapshot: snapshot },
+      { onConflict: "user_id,date" },
+    );
 }
 
 function dateStr(offset = 0) {
@@ -196,20 +276,69 @@ function thStyle(extra = {}) {
 }
 
 const FORM_STEPS = [
-  { name: "name",     label: "Food Name",         type: "text",    placeholder: "e.g. Grilled chicken" },
-  { name: "calories", label: "Calories",        type: "number",  unit: "kcal", placeholder: "e.g. 350" },
-  { name: "protein",  label: "Protein",         type: "number",  unit: "g",    placeholder: "0", optional: true },
-  { name: "carbs",    label: "Carbs",           type: "number",  unit: "g",    placeholder: "0", optional: true },
-  { name: "fat",      label: "Fat",             type: "number",  unit: "g",    placeholder: "0", optional: true },
-  { name: "fiber",    label: "Fiber",           type: "number",  unit: "g",    placeholder: "0", optional: true },
-  { name: "sugar",    label: "Sugar",           type: "number",  unit: "g",    placeholder: "0", optional: true },
-  { name: "serving",  label: "Serving Size",  type: "serving", optional: true },
+  {
+    name: "name",
+    label: "Food Name",
+    type: "text",
+    placeholder: "e.g. Grilled chicken",
+  },
+  {
+    name: "calories",
+    label: "Calories",
+    type: "number",
+    unit: "kcal",
+    placeholder: "e.g. 350",
+  },
+  {
+    name: "protein",
+    label: "Protein",
+    type: "number",
+    unit: "g",
+    placeholder: "0",
+    optional: true,
+  },
+  {
+    name: "carbs",
+    label: "Carbs",
+    type: "number",
+    unit: "g",
+    placeholder: "0",
+    optional: true,
+  },
+  {
+    name: "fat",
+    label: "Fat",
+    type: "number",
+    unit: "g",
+    placeholder: "0",
+    optional: true,
+  },
+  {
+    name: "fiber",
+    label: "Fiber",
+    type: "number",
+    unit: "g",
+    placeholder: "0",
+    optional: true,
+  },
+  {
+    name: "sugar",
+    label: "Sugar",
+    type: "number",
+    unit: "g",
+    placeholder: "0",
+    optional: true,
+  },
+  { name: "serving", label: "Serving Size", type: "serving", optional: true },
 ];
 
 export default function Nutrition() {
   const { user, requireAuth, loading } = useAuth();
   const [entries, setEntries] = useState([]);
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, serving_unit: getLastUnit() }));
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    serving_unit: getLastUnit(),
+  }));
   const [savedFoods, setSavedFoods] = useState([]);
   const [myFoodsOpen, setMyFoodsOpen] = useState(true);
   const [myFoodsSearch, setMyFoodsSearch] = useState("");
@@ -244,10 +373,16 @@ export default function Nutrition() {
   const [editingPlanItem, setEditingPlanItem] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [compareFood, setCompareFood] = useState(null);
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 767px)").matches);
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia("(max-width: 767px)").matches,
+  );
   const [selectedUsdaFood, setSelectedUsdaFood] = useState(null);
   const [servingInput, setServingInput] = useState("");
-  const [toast, setToast] = useState({ visible: false, color: "#22c55e", message: "" });
+  const [toast, setToast] = useState({
+    visible: false,
+    color: "#22c55e",
+    message: "",
+  });
   const [scannerOpen, setScannerOpen] = useState(false);
   const [isFromBarcode, setIsFromBarcode] = useState(false);
   const [barcodeUnit, setBarcodeUnit] = useState("g");
@@ -265,7 +400,9 @@ export default function Nutrition() {
   const [entriesError, setEntriesError] = useState(false);
   const [libraryLoaded, setLibraryLoaded] = useState(false);
   const [libraryError, setLibraryError] = useState(false);
-  const [weightDismissed, setWeightDismissed] = useState(() => localStorage.getItem("rir0_weight_dismissed") === todayStr());
+  const [weightDismissed, setWeightDismissed] = useState(
+    () => localStorage.getItem("rir0_weight_dismissed") === todayStr(),
+  );
   const [weightInput, setWeightInput] = useState("");
   const [guestGoalsOpen, setGuestGoalsOpen] = useState(false);
   const [guestGoalsForm, setGuestGoalsForm] = useState({});
@@ -280,7 +417,10 @@ export default function Nutrition() {
   function showToast(message, color = "#22c55e") {
     clearTimeout(toastTimer.current);
     setToast({ visible: true, color, message });
-    toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, visible: false })), 2500);
+    toastTimer.current = setTimeout(
+      () => setToast((t) => ({ ...t, visible: false })),
+      2500,
+    );
   }
 
   function openGuestGoals() {
@@ -302,8 +442,13 @@ export default function Nutrition() {
     if (!selectedUsdaFood) return 1;
     if (!selectedUsdaFood.servingSize) return Number(servingInput) || 1;
     if (isFromBarcode && unitFactor(barcodeUnit) != null) {
-      const origFactor = unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ?? 1;
-      return (Number(servingInput) || 0) * unitFactor(barcodeUnit) / (selectedUsdaFood.servingSize * origFactor);
+      const origFactor =
+        unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ??
+        1;
+      return (
+        ((Number(servingInput) || 0) * unitFactor(barcodeUnit)) /
+        (selectedUsdaFood.servingSize * origFactor)
+      );
     }
     return (Number(servingInput) || 0) / selectedUsdaFood.servingSize;
   })();
@@ -311,7 +456,9 @@ export default function Nutrition() {
   const filteredSortedFoods = (() => {
     const q = myFoodsSearch.trim().toLowerCase();
     if (q) {
-      const matches = savedFoods.filter((f) => f.name.toLowerCase().includes(q));
+      const matches = savedFoods.filter((f) =>
+        f.name.toLowerCase().includes(q),
+      );
       return matches.sort((a, b) => {
         const aStarts = a.name.toLowerCase().startsWith(q);
         const bStarts = b.name.toLowerCase().startsWith(q);
@@ -321,15 +468,37 @@ export default function Nutrition() {
     }
     let list = [...savedFoods];
     switch (myFoodsSort) {
-      case "name_asc":  list.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case "name_desc": list.sort((a, b) => b.name.localeCompare(a.name)); break;
-      case "protein_cal": list.sort((a, b) => ((b.protein || 0) / (b.calories || 1)) - ((a.protein || 0) / (a.calories || 1))); break;
-      case "calories": list.sort((a, b) => (b.calories || 0) - (a.calories || 0)); break;
-      case "protein":  list.sort((a, b) => (b.protein || 0) - (a.protein || 0)); break;
-      case "fat":      list.sort((a, b) => (b.fat || 0) - (a.fat || 0)); break;
-      case "carbs":    list.sort((a, b) => (b.carbs || 0) - (a.carbs || 0)); break;
-      case "sugar":    list.sort((a, b) => (b.sugar || 0) - (a.sugar || 0)); break;
-      case "fiber":    list.sort((a, b) => (b.fiber || 0) - (a.fiber || 0)); break;
+      case "name_asc":
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name_desc":
+        list.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case "protein_cal":
+        list.sort(
+          (a, b) =>
+            (b.protein || 0) / (b.calories || 1) -
+            (a.protein || 0) / (a.calories || 1),
+        );
+        break;
+      case "calories":
+        list.sort((a, b) => (b.calories || 0) - (a.calories || 0));
+        break;
+      case "protein":
+        list.sort((a, b) => (b.protein || 0) - (a.protein || 0));
+        break;
+      case "fat":
+        list.sort((a, b) => (b.fat || 0) - (a.fat || 0));
+        break;
+      case "carbs":
+        list.sort((a, b) => (b.carbs || 0) - (a.carbs || 0));
+        break;
+      case "sugar":
+        list.sort((a, b) => (b.sugar || 0) - (a.sugar || 0));
+        break;
+      case "fiber":
+        list.sort((a, b) => (b.fiber || 0) - (a.fiber || 0));
+        break;
     }
     return list;
   })();
@@ -379,34 +548,37 @@ export default function Nutrition() {
     const guestEntries = loadGuestEntries();
     clearGuestEntries();
     const syncPromises = guestEntries.map(({ id: _id, ...rest }) =>
-      supabase.from("nutrition_logs").insert({ ...rest, user_id: user.id, is_planned: false })
-    );
-    Promise.all(syncPromises).then(() => {
       supabase
         .from("nutrition_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("logged_at", todayStr())
-        .lt("logged_at", tomorrowStr())
-        .order("logged_time")
-        .then(({ data, error }) => {
-          if (error) {
-            console.error("Unable to fetch nutrition logs:", error);
-            setEntriesError(true);
-          } else {
-            const all = data || [];
-            setEntries(all.filter(e => !e.is_planned));
-            setDayPlanItems(all.filter(e => e.is_planned));
-          }
-          setEntriesLoaded(true);
-        });
-    }).catch((err) => {
-      console.error("Unable to fetch nutrition logs:", err);
-      setEntriesError(true);
-      setEntriesLoaded(true);
-    });
+        .insert({ ...rest, user_id: user.id, is_planned: false }),
+    );
+    Promise.all(syncPromises)
+      .then(() => {
+        supabase
+          .from("nutrition_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .gte("logged_at", todayStr())
+          .lt("logged_at", tomorrowStr())
+          .order("logged_time")
+          .then(({ data, error }) => {
+            if (error) {
+              console.error("Unable to fetch nutrition logs:", error);
+              setEntriesError(true);
+            } else {
+              const all = data || [];
+              setEntries(all.filter((e) => !e.is_planned));
+              setDayPlanItems(all.filter((e) => e.is_planned));
+            }
+            setEntriesLoaded(true);
+          });
+      })
+      .catch((err) => {
+        console.error("Unable to fetch nutrition logs:", err);
+        setEntriesError(true);
+        setEntriesLoaded(true);
+      });
   }, [user, loading]);
-
 
   useEffect(() => {
     if (!user) {
@@ -436,7 +608,9 @@ export default function Nutrition() {
     } else {
       document.body.style.overflow = "";
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [planExitOpen]);
 
   // ── load nutrition goals from DB (or localStorage for guests)
@@ -455,7 +629,9 @@ export default function Nutrition() {
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle()
-      .then(({ data }) => { if (data) setGoals(data); });
+      .then(({ data }) => {
+        if (data) setGoals(data);
+      });
   }, [user]);
 
   // ── load macro preferences from DB
@@ -470,17 +646,25 @@ export default function Nutrition() {
         if (!data) return;
         if (Array.isArray(data.nutrition_visible_macros)) {
           setVisibleMacros(new Set(data.nutrition_visible_macros));
-          localStorage.setItem(VISIBLE_KEY, JSON.stringify(data.nutrition_visible_macros));
+          localStorage.setItem(
+            VISIBLE_KEY,
+            JSON.stringify(data.nutrition_visible_macros),
+          );
         }
       });
   }, [user]);
 
   async function saveMacroPrefs(visible) {
-    if (!user) { console.warn("saveMacroPrefs: no user"); return; }
-    const { error } = await supabase.from("user_preferences").upsert(
-      { user_id: user.id, nutrition_visible_macros: [...visible] },
-      { onConflict: "user_id" }
-    );
+    if (!user) {
+      console.warn("saveMacroPrefs: no user");
+      return;
+    }
+    const { error } = await supabase
+      .from("user_preferences")
+      .upsert(
+        { user_id: user.id, nutrition_visible_macros: [...visible] },
+        { onConflict: "user_id" },
+      );
     if (error) console.error("saveMacroPrefs error:", error);
   }
 
@@ -496,7 +680,9 @@ export default function Nutrition() {
     setScannerOpen(false);
     showToast("Looking up product…", "#888");
     try {
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+      const res = await fetch(
+        `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+      );
       const json = await res.json();
       if (json.status !== 1 || !json.product) {
         showToast("Product not found — try searching manually", "#e05c5c");
@@ -507,11 +693,14 @@ export default function Nutrition() {
       const qty = Number(p.serving_quantity) || 0;
       const suffix = qty > 0 ? "_serving" : "_100g";
       const servingUnit = (() => {
-        if (p.serving_quantity_unit) return p.serving_quantity_unit.toLowerCase();
+        if (p.serving_quantity_unit)
+          return p.serving_quantity_unit.toLowerCase();
         if (!p.serving_size) return "g";
         const pairs = [...p.serving_size.matchAll(/([\d.]+)\s*([a-zA-Z]+)/g)];
         // Prefer the pair whose number matches serving_quantity (e.g. "25 g" in "1 tbsp (25 g)")
-        const match = pairs.find(([, num]) => qty > 0 && Math.abs(Number(num) - qty) < 0.5);
+        const match = pairs.find(
+          ([, num]) => qty > 0 && Math.abs(Number(num) - qty) < 0.5,
+        );
         return (match ? match[2] : pairs[0]?.[2] || "g").toLowerCase();
       })();
       let displaySize = qty > 0 ? qty : 100;
@@ -521,7 +710,10 @@ export default function Nutrition() {
       // and snap back so beverages show a clean unit instead of e.g. "340.194 g".
       if (displayUnit === "g" && displaySize > 0) {
         const flOzEquiv = displaySize / 28.3495;
-        if (flOzEquiv >= 0.5 && Math.abs(flOzEquiv - Math.round(flOzEquiv)) < 0.02) {
+        if (
+          flOzEquiv >= 0.5 &&
+          Math.abs(flOzEquiv - Math.round(flOzEquiv)) < 0.02
+        ) {
           displaySize = Math.round(flOzEquiv);
           displayUnit = "fl oz";
         } else {
@@ -529,17 +721,36 @@ export default function Nutrition() {
         }
       }
       const food = {
-        description: p.product_name || p.abbreviated_product_name || "Unknown product",
+        description:
+          p.product_name || p.abbreviated_product_name || "Unknown product",
         brandOwner: p.brands || null,
         servingSize: displaySize,
         servingSizeUnit: displayUnit,
         foodNutrients: [
-          { nutrientNumber: "208", value: n[`energy-kcal${suffix}`] ?? n["energy-kcal_100g"] ?? 0 },
-          { nutrientNumber: "203", value: n[`proteins${suffix}`] ?? n["proteins_100g"] ?? 0 },
-          { nutrientNumber: "204", value: n[`fat${suffix}`] ?? n["fat_100g"] ?? 0 },
-          { nutrientNumber: "205", value: n[`carbohydrates${suffix}`] ?? n["carbohydrates_100g"] ?? 0 },
-          { nutrientNumber: "291", value: n[`fiber${suffix}`] ?? n["fiber_100g"] ?? 0 },
-          { nutrientNumber: "269", value: n[`sugars${suffix}`] ?? n["sugars_100g"] ?? 0 },
+          {
+            nutrientNumber: "208",
+            value: n[`energy-kcal${suffix}`] ?? n["energy-kcal_100g"] ?? 0,
+          },
+          {
+            nutrientNumber: "203",
+            value: n[`proteins${suffix}`] ?? n["proteins_100g"] ?? 0,
+          },
+          {
+            nutrientNumber: "204",
+            value: n[`fat${suffix}`] ?? n["fat_100g"] ?? 0,
+          },
+          {
+            nutrientNumber: "205",
+            value: n[`carbohydrates${suffix}`] ?? n["carbohydrates_100g"] ?? 0,
+          },
+          {
+            nutrientNumber: "291",
+            value: n[`fiber${suffix}`] ?? n["fiber_100g"] ?? 0,
+          },
+          {
+            nutrientNumber: "269",
+            value: n[`sugars${suffix}`] ?? n["sugars_100g"] ?? 0,
+          },
         ],
       };
       const origUnit = food.servingSizeUnit.toLowerCase();
@@ -582,19 +793,29 @@ export default function Nutrition() {
     if (!selectedUsdaFood) return;
     showToast("Logging food...", "#e0ba21");
     let scale, unit;
-    if (isFromBarcode && unitFactor(barcodeUnit) != null && selectedUsdaFood.servingSize) {
-      const origFactor = unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ?? 1;
-      scale = (Number(servingInput) || 0) * unitFactor(barcodeUnit) / (selectedUsdaFood.servingSize * origFactor);
+    if (
+      isFromBarcode &&
+      unitFactor(barcodeUnit) != null &&
+      selectedUsdaFood.servingSize
+    ) {
+      const origFactor =
+        unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) ??
+        1;
+      scale =
+        ((Number(servingInput) || 0) * unitFactor(barcodeUnit)) /
+        (selectedUsdaFood.servingSize * origFactor);
       unit = barcodeUnit;
     } else {
       scale = selectedUsdaFood.servingSize
         ? (Number(servingInput) || 0) / selectedUsdaFood.servingSize
-        : (Number(servingInput) || 1);
+        : Number(servingInput) || 1;
       const rawUnit = (selectedUsdaFood.servingSizeUnit || "G").toUpperCase();
       unit = USDA_UNIT_MAP[rawUnit] || "g";
     }
     const get = (num) => {
-      const n = selectedUsdaFood.foodNutrients?.find((n) => n.nutrientNumber === num);
+      const n = selectedUsdaFood.foodNutrients?.find(
+        (n) => n.nutrientNumber === num,
+      );
       return n ? Math.round(n.value * scale * 10) / 10 : 0;
     };
 
@@ -603,7 +824,11 @@ export default function Nutrition() {
       const entry = {
         id: "guest_" + Date.now(),
         logged_at: todayStr(),
-        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        logged_time: now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
         food_name: selectedUsdaFood.description,
         calories: Math.round(get(USDA_NUTRIENTS.calories)),
         protein: get(USDA_NUTRIENTS.protein),
@@ -624,12 +849,18 @@ export default function Nutrition() {
     }
 
     requireAuth(async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
+      const {
+        data: { user: u },
+      } = await supabase.auth.getUser();
       const now = new Date();
       const entry = {
         user_id: u.id,
         logged_at: todayStr(),
-        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        logged_time: now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
         food_name: selectedUsdaFood.description,
         calories: Math.round(get(USDA_NUTRIENTS.calories)),
         protein: get(USDA_NUTRIENTS.protein),
@@ -640,7 +871,11 @@ export default function Nutrition() {
         serving_amount: Number(servingInput) || null,
         serving_unit: selectedUsdaFood.servingSize ? unit : "×",
       };
-      const { data } = await supabase.from("nutrition_logs").insert(entry).select().single();
+      const { data } = await supabase
+        .from("nutrition_logs")
+        .insert(entry)
+        .select()
+        .single();
       if (data) {
         const next = [...entries, data];
         setEntries(next);
@@ -662,17 +897,40 @@ export default function Nutrition() {
 
   function formNext() {
     const step = FORM_STEPS[formStep];
-    if (step.name === "name" && !form.name.trim()) { setError("Food name is required."); return; }
-    if (step.name === "calories" && (form.calories === "" || isNaN(Number(form.calories)) || Number(form.calories) < 0)) { setError("Enter a valid calorie amount."); return; }
+    if (step.name === "name" && !form.name.trim()) {
+      setError("Food name is required.");
+      return;
+    }
+    if (
+      step.name === "calories" &&
+      (form.calories === "" ||
+        isNaN(Number(form.calories)) ||
+        Number(form.calories) < 0)
+    ) {
+      setError("Enter a valid calorie amount.");
+      return;
+    }
     setError("");
-    if (confirmEdit) { setConfirmEdit(false); setFormStep(FORM_STEPS.length); return; }
-    setFormStep(s => s + 1);
+    if (confirmEdit) {
+      setConfirmEdit(false);
+      setFormStep(FORM_STEPS.length);
+      return;
+    }
+    setFormStep((s) => s + 1);
   }
 
   function formBack() {
     setError("");
-    if (confirmEdit) { setConfirmEdit(false); setFormStep(FORM_STEPS.length); return; }
-    if (formStep === 0) { closeFormModal(); } else { setFormStep(s => s - 1); }
+    if (confirmEdit) {
+      setConfirmEdit(false);
+      setFormStep(FORM_STEPS.length);
+      return;
+    }
+    if (formStep === 0) {
+      closeFormModal();
+    } else {
+      setFormStep((s) => s - 1);
+    }
   }
 
   function handleAdd(e) {
@@ -695,7 +953,11 @@ export default function Nutrition() {
         id: "plan_" + Date.now(),
         planned: true,
         logged_at: todayStr(),
-        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        logged_time: now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
         food_name: form.name.trim(),
         calories: Number(form.calories) || 0,
         protein: Number(form.protein) || 0,
@@ -703,7 +965,8 @@ export default function Nutrition() {
         carbs: Number(form.carbs) || 0,
         fiber: Number(form.fiber) || 0,
         sugar: Number(form.sugar) || 0,
-        serving_amount: form.serving_amount !== "" ? Number(form.serving_amount) : null,
+        serving_amount:
+          form.serving_amount !== "" ? Number(form.serving_amount) : null,
         serving_unit: form.serving_unit || "g",
       };
       setPlannedEntries((prev) => [...prev, entry]);
@@ -719,7 +982,11 @@ export default function Nutrition() {
       const entry = {
         id: "guest_" + Date.now(),
         logged_at: todayStr(),
-        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        logged_time: now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
         food_name: form.name.trim(),
         calories: Number(form.calories) || 0,
         protein: Number(form.protein) || 0,
@@ -727,7 +994,8 @@ export default function Nutrition() {
         carbs: Number(form.carbs) || 0,
         fiber: Number(form.fiber) || 0,
         sugar: Number(form.sugar) || 0,
-        serving_amount: form.serving_amount !== "" ? Number(form.serving_amount) : null,
+        serving_amount:
+          form.serving_amount !== "" ? Number(form.serving_amount) : null,
         serving_unit: form.serving_unit || "g",
       };
       const next = [...entries, entry];
@@ -803,7 +1071,9 @@ export default function Nutrition() {
           serving_unit: form.serving_unit || "g",
           serving_weight_g: (() => {
             const g = UNIT_TO_G[form.serving_unit];
-            return g && form.serving_amount !== "" ? Number(form.serving_amount) * g : null;
+            return g && form.serving_amount !== ""
+              ? Number(form.serving_amount) * g
+              : null;
           })(),
         };
         const { data } = await supabase
@@ -859,21 +1129,33 @@ export default function Nutrition() {
 
   function handleAddFromLibrary(food) {
     if (planMode) {
-      const customAmount = Number(libraryAmounts[food.name] ?? food.serving_amount ?? 1);
+      const customAmount = Number(
+        libraryAmounts[food.name] ?? food.serving_amount ?? 1,
+      );
       const selectedUnit = libraryUnits[food.name] ?? food.serving_unit;
       let scale;
       if (food.serving_weight_g && UNIT_TO_G[selectedUnit]) {
-        scale = (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
+        scale =
+          (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
       } else {
         const baseAmount = Number(food.serving_amount);
-        scale = baseAmount > 0 ? (customAmount > 0 ? customAmount / baseAmount : 1) : customAmount;
+        scale =
+          baseAmount > 0
+            ? customAmount > 0
+              ? customAmount / baseAmount
+              : 1
+            : customAmount;
       }
       const now = new Date();
       const entry = {
         id: "plan_" + Date.now(),
         planned: true,
         logged_at: todayStr(),
-        logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        logged_time: now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
         food_name: food.name,
         calories: Math.round(food.calories * scale),
         protein: Math.round(food.protein * scale * 10) / 10,
@@ -882,11 +1164,22 @@ export default function Nutrition() {
         fiber: Math.round(food.fiber * scale * 10) / 10,
         sugar: Math.round(food.sugar * scale * 10) / 10,
         serving_amount: customAmount || food.serving_amount,
-        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : selectedUnit,
+        serving_unit:
+          !food.serving_amount || food.serving_unit === "×"
+            ? "×"
+            : selectedUnit,
       };
       setPlannedEntries((prev) => [...prev, entry]);
-      setLibraryAmounts((prev) => { const n = { ...prev }; delete n[food.name]; return n; });
-      setLibraryUnits((prev) => { const n = { ...prev }; delete n[food.name]; return n; });
+      setLibraryAmounts((prev) => {
+        const n = { ...prev };
+        delete n[food.name];
+        return n;
+      });
+      setLibraryUnits((prev) => {
+        const n = { ...prev };
+        delete n[food.name];
+        return n;
+      });
       showToast("Added to plan", "#4f8ef7");
       return;
     }
@@ -903,10 +1196,16 @@ export default function Nutrition() {
       const selectedUnit = libraryUnits[food.name] ?? food.serving_unit;
       let scale;
       if (food.serving_weight_g && UNIT_TO_G[selectedUnit]) {
-        scale = (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
+        scale =
+          (customAmount * UNIT_TO_G[selectedUnit]) / food.serving_weight_g;
       } else {
         const baseAmount = Number(food.serving_amount);
-        scale = baseAmount > 0 ? (customAmount > 0 ? customAmount / baseAmount : 1) : customAmount;
+        scale =
+          baseAmount > 0
+            ? customAmount > 0
+              ? customAmount / baseAmount
+              : 1
+            : customAmount;
       }
       const now = new Date();
       const entry = {
@@ -925,7 +1224,10 @@ export default function Nutrition() {
         fiber: Math.round(food.fiber * scale * 10) / 10,
         sugar: Math.round(food.sugar * scale * 10) / 10,
         serving_amount: customAmount || food.serving_amount,
-        serving_unit: (!food.serving_amount || food.serving_unit === "×") ? "×" : selectedUnit,
+        serving_unit:
+          !food.serving_amount || food.serving_unit === "×"
+            ? "×"
+            : selectedUnit,
       };
       const { data } = await supabase
         .from("nutrition_logs")
@@ -996,22 +1298,36 @@ export default function Nutrition() {
   async function handleLogWeight() {
     if (!user || !weightInput) return;
     const prefUnit = goals.preferred_weight_unit || "kg";
-    const kg = prefUnit === "lbs"
-      ? Math.round(Number(weightInput) / 2.20462 * 10) / 10
-      : Number(weightInput);
-    const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === (goals.weigh_in_frequency || "weekly"))?.days ?? 7;
+    const kg =
+      prefUnit === "lbs"
+        ? Math.round((Number(weightInput) / 2.20462) * 10) / 10
+        : Number(weightInput);
+    const freqDays =
+      WEIGH_FREQ_OPTIONS.find(
+        (f) => f.value === (goals.weigh_in_frequency || "weekly"),
+      )?.days ?? 7;
     const nextWeighInDate = addDays(todayStr(), freqDays);
     await Promise.all([
-      supabase.from("weight_logs").upsert(
-        { user_id: user.id, date: todayStr(), weight_kg: kg },
-        { onConflict: "user_id,date" }
-      ),
+      supabase
+        .from("weight_logs")
+        .upsert(
+          { user_id: user.id, date: todayStr(), weight_kg: kg },
+          { onConflict: "user_id,date" },
+        ),
       supabase.from("nutrition_goals").upsert(
-        { user_id: user.id, weight_kg: kg, next_weigh_in_date: nextWeighInDate },
-        { onConflict: "user_id" }
+        {
+          user_id: user.id,
+          weight_kg: kg,
+          next_weigh_in_date: nextWeighInDate,
+        },
+        { onConflict: "user_id" },
       ),
     ]);
-    setGoals(g => ({ ...g, weight_kg: kg, next_weigh_in_date: nextWeighInDate }));
+    setGoals((g) => ({
+      ...g,
+      weight_kg: kg,
+      next_weigh_in_date: nextWeighInDate,
+    }));
     setWeightInput("");
   }
 
@@ -1043,11 +1359,20 @@ export default function Nutrition() {
       fat: Number(editForm.fat) || 0,
       fiber: Number(editForm.fiber) || 0,
       sugar: Number(editForm.sugar) || 0,
-      serving_amount: editForm.serving_amount ? Number(editForm.serving_amount) : null,
+      serving_amount: editForm.serving_amount
+        ? Number(editForm.serving_amount)
+        : null,
       serving_unit: editForm.serving_unit || "g",
     };
-    await supabase.from("custom_foods").update(updated).eq("id", editingLibraryFood.id);
-    setSavedFoods((prev) => prev.map((f) => f.id === editingLibraryFood.id ? { ...f, ...updated } : f));
+    await supabase
+      .from("custom_foods")
+      .update(updated)
+      .eq("id", editingLibraryFood.id);
+    setSavedFoods((prev) =>
+      prev.map((f) =>
+        f.id === editingLibraryFood.id ? { ...f, ...updated } : f,
+      ),
+    );
     setEditingLibraryFood(null);
   }
 
@@ -1058,7 +1383,9 @@ export default function Nutrition() {
     const origUnit = editingPlanItem.serving_unit || "g";
     const newUnit = editForm.serving_unit || "g";
     if (UNIT_TO_G[origUnit] && UNIT_TO_G[newUnit]) {
-      return (newAmount * UNIT_TO_G[newUnit]) / (origAmount * UNIT_TO_G[origUnit]);
+      return (
+        (newAmount * UNIT_TO_G[newUnit]) / (origAmount * UNIT_TO_G[origUnit])
+      );
     }
     return origAmount > 0 ? newAmount / origAmount : newAmount;
   }
@@ -1077,11 +1404,20 @@ export default function Nutrition() {
       serving_amount: Number(editForm.serving_amount) || null,
       serving_unit: editForm.serving_unit || "g",
     };
-    setDayPlanItems(prev => prev.map(i => i.id === editingPlanItem.id ? { ...i, ...updated } : i));
+    setDayPlanItems((prev) =>
+      prev.map((i) => (i.id === editingPlanItem.id ? { ...i, ...updated } : i)),
+    );
     if (user) {
-      await supabase.from("nutrition_logs").update(updated).eq("id", editingPlanItem.id);
+      await supabase
+        .from("nutrition_logs")
+        .update(updated)
+        .eq("id", editingPlanItem.id);
     } else {
-      saveGuestPlan(dayPlanItems.map(i => i.id === editingPlanItem.id ? { ...i, ...updated } : i));
+      saveGuestPlan(
+        dayPlanItems.map((i) =>
+          i.id === editingPlanItem.id ? { ...i, ...updated } : i,
+        ),
+      );
     }
     setEditingPlanItem(null);
   }
@@ -1092,7 +1428,7 @@ export default function Nutrition() {
   }
 
   function toggleEntrySelection(id) {
-    setSelectedEntryIds(prev => {
+    setSelectedEntryIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -1101,47 +1437,72 @@ export default function Nutrition() {
 
   async function handleDeleteSelected() {
     const ids = [...selectedEntryIds];
-    const next = entries.filter(e => !selectedEntryIds.has(e.id));
+    const next = entries.filter((e) => !selectedEntryIds.has(e.id));
     if (!user) {
       setEntries(next);
       saveGuestEntries(next);
     } else {
-      await Promise.all(ids.map(id => supabase.from("nutrition_logs").delete().eq("id", id)));
+      await Promise.all(
+        ids.map((id) => supabase.from("nutrition_logs").delete().eq("id", id)),
+      );
       setEntries(next);
       upsertDailyStatus(todayStr(), next, goals, user.id);
     }
     exitSelectionMode();
-    showToast(`${ids.length} ${ids.length === 1 ? "entry" : "entries"} deleted`, "#ef4444");
+    showToast(
+      `${ids.length} ${ids.length === 1 ? "entry" : "entries"} deleted`,
+      "#ef4444",
+    );
   }
 
   async function handleCombineSelected() {
-    const selected = entries.filter(e => selectedEntryIds.has(e.id));
+    const selected = entries.filter((e) => selectedEntryIds.has(e.id));
     const ids = [...selectedEntryIds];
     const combined = MACROS.reduce((acc, m) => {
-      acc[m.key] = m.key === "calories"
-        ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
-        : Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) / 10;
+      acc[m.key] =
+        m.key === "calories"
+          ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
+          : Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) /
+            10;
       return acc;
     }, {});
-    const now = new Date();
+    const toMinutes = (t) => {
+      if (!t) return Infinity;
+      const m = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return Infinity;
+      let h = parseInt(m[1]);
+      const min = parseInt(m[2]);
+      if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+      if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+      return h * 60 + min;
+    };
+    const earliest = selected.reduce((a, b) =>
+      toMinutes(a.logged_time) <= toMinutes(b.logged_time) ? a : b
+    );
     const entry = {
       logged_at: todayStr(),
-      logged_time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+      logged_time: earliest.logged_time ?? new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
       food_name: combineName.trim() || "Combined entry",
       ...combined,
       serving_amount: null,
       serving_unit: "×",
     };
     if (!user) {
-      const remaining = entries.filter(e => !selectedEntryIds.has(e.id));
+      const remaining = entries.filter((e) => !selectedEntryIds.has(e.id));
       const final = [...remaining, { ...entry, id: "guest_" + Date.now() }];
       setEntries(final);
       saveGuestEntries(final);
     } else {
-      await Promise.all(ids.map(id => supabase.from("nutrition_logs").delete().eq("id", id)));
-      const { data } = await supabase.from("nutrition_logs").insert({ ...entry, user_id: user.id }).select().single();
+      await Promise.all(
+        ids.map((id) => supabase.from("nutrition_logs").delete().eq("id", id)),
+      );
+      const { data } = await supabase
+        .from("nutrition_logs")
+        .insert({ ...entry, user_id: user.id })
+        .select()
+        .single();
       if (data) {
-        const remaining = entries.filter(e => !selectedEntryIds.has(e.id));
+        const remaining = entries.filter((e) => !selectedEntryIds.has(e.id));
         const final = [...remaining, data];
         setEntries(final);
         upsertDailyStatus(todayStr(), final, goals, user.id);
@@ -1156,12 +1517,21 @@ export default function Nutrition() {
   async function markPlanItemComplete(item) {
     showToast("Logging…", "#888");
     const now = new Date();
-    const loggedTime = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-    const next = dayPlanItems.filter(i => i.id !== item.id);
+    const loggedTime = now.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    const next = dayPlanItems.filter((i) => i.id !== item.id);
     setDayPlanItems(next);
     if (user) {
-      const { data } = await supabase.from("nutrition_logs")
-        .update({ is_planned: false, logged_at: todayStr(), logged_time: loggedTime })
+      const { data } = await supabase
+        .from("nutrition_logs")
+        .update({
+          is_planned: false,
+          logged_at: todayStr(),
+          logged_time: loggedTime,
+        })
         .eq("id", item.id)
         .select()
         .single();
@@ -1171,7 +1541,14 @@ export default function Nutrition() {
         upsertDailyStatus(todayStr(), nextEntries, goals, user.id);
       }
     } else {
-      const nextEntries = [...entries, { ...item, id: "guest_" + Date.now() + Math.random(), logged_time: loggedTime }];
+      const nextEntries = [
+        ...entries,
+        {
+          ...item,
+          id: "guest_" + Date.now() + Math.random(),
+          logged_time: loggedTime,
+        },
+      ];
       setEntries(nextEntries);
       saveGuestEntries(nextEntries);
       saveGuestPlan(next);
@@ -1180,7 +1557,7 @@ export default function Nutrition() {
   }
 
   async function editPlanItem(id) {
-    const item = dayPlanItems.find(i => i.id === id);
+    const item = dayPlanItems.find((i) => i.id === id);
     if (!item) return;
     setEditForm({
       serving_amount: String(item.serving_amount ?? ""),
@@ -1190,7 +1567,7 @@ export default function Nutrition() {
   }
 
   async function removePlanItem(id) {
-    const next = dayPlanItems.filter(i => i.id !== id);
+    const next = dayPlanItems.filter((i) => i.id !== id);
     setDayPlanItems(next);
     if (user) {
       await supabase.from("nutrition_logs").delete().eq("id", id);
@@ -1199,7 +1576,9 @@ export default function Nutrition() {
     }
   }
 
-  const sortedEntries = [...entries].sort((a, b) => parseLoggedTime(a.logged_time) - parseLoggedTime(b.logged_time));
+  const sortedEntries = [...entries].sort(
+    (a, b) => parseLoggedTime(a.logged_time) - parseLoggedTime(b.logged_time),
+  );
 
   const actualTotals = MACROS.reduce((acc, m) => {
     acc[m.key] = entries.reduce((sum, e) => sum + (e[m.key] || 0), 0);
@@ -1207,7 +1586,9 @@ export default function Nutrition() {
   }, {});
 
   const totals = MACROS.reduce((acc, m) => {
-    const planned = planMode ? plannedEntries.reduce((sum, e) => sum + (e[m.key] || 0), 0) : 0;
+    const planned = planMode
+      ? plannedEntries.reduce((sum, e) => sum + (e[m.key] || 0), 0)
+      : 0;
     acc[m.key] = actualTotals[m.key] + planned;
     return acc;
   }, {});
@@ -1222,7 +1603,10 @@ export default function Nutrition() {
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 8px" }}>
       <div style={{ display: "flex" }}>
         <p className="font-bold text-[2rem] mb-1">Nutrition Tracker</p>
-        <button className="relative inline-flex items-center justify-center ml-auto cursor-pointer" onClick={() => setCalendarOpen(true)}>
+        <button
+          className="relative inline-flex items-center justify-center ml-auto cursor-pointer"
+          onClick={() => setCalendarOpen(true)}
+        >
           <LuCalendar size={45} />
           <span className="absolute bottom-[15px] text-[11px] font-bold leading-none">
             {monthAbbr}
@@ -1234,25 +1618,38 @@ export default function Nutrition() {
       </p>
 
       {!user && (
-        <div style={{
-          background: "#fff8f0",
-          border: "1px solid #ffd8a8",
-          borderRadius: 8,
-          padding: "10px 16px",
-          marginBottom: 20,
-          fontSize: 13,
-          color: "#a05a00",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          flexWrap: "wrap",
-        }}>
+        <div
+          style={{
+            background: "#fff8f0",
+            border: "1px solid #ffd8a8",
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 20,
+            fontSize: 13,
+            color: "#a05a00",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
           <span style={{ flex: 1 }}>
-            You're browsing as a guest — food entries are saved locally for today only.
+            You're browsing as a guest — food entries are saved locally for
+            today only.
           </span>
           <button
             onClick={() => requireAuth(() => {})}
-            style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}
+            style={{
+              background: "#ff8c42",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "5px 14px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
           >
             Sign in to save
           </button>
@@ -1290,13 +1687,26 @@ export default function Nutrition() {
                 letterSpacing: "0.05em",
               }}
             >
-              {planMode && <span style={{ color: "#4f8ef7", marginRight: 6 }}>Planning ·</span>}
+              {planMode && (
+                <span style={{ color: "#4f8ef7", marginRight: 6 }}>
+                  Planning ·
+                </span>
+              )}
               Daily Progress
             </span>
             {!user && (
               <button
                 onClick={openGuestGoals}
-                style={{ fontSize: 11, color: "#888", background: "#f0f0f0", border: "none", borderRadius: 6, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}
+                style={{
+                  fontSize: 11,
+                  color: "#888",
+                  background: "#f0f0f0",
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "3px 9px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
               >
                 Set goals
               </button>
@@ -1394,135 +1804,298 @@ export default function Nutrition() {
         {!entriesLoaded ? (
           visibleMacroList.map((m) => (
             <div key={m.key} style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                <div className="skeleton-shimmer" style={{ width: 72, height: 13, borderRadius: 4 }} />
-                <div className="skeleton-shimmer" style={{ width: 60, height: 13, borderRadius: 4 }} />
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 5,
+                }}
+              >
+                <div
+                  className="skeleton-shimmer"
+                  style={{ width: 72, height: 13, borderRadius: 4 }}
+                />
+                <div
+                  className="skeleton-shimmer"
+                  style={{ width: 60, height: 13, borderRadius: 4 }}
+                />
               </div>
-              <div className="skeleton-shimmer" style={{ height: 8, borderRadius: 99 }} />
+              <div
+                className="skeleton-shimmer"
+                style={{ height: 8, borderRadius: 99 }}
+              />
             </div>
           ))
         ) : entriesError ? (
-          <p style={{ color: "#e05c5c", fontSize: 13, margin: 0, padding: "4px 0" }}>
+          <p
+            style={{
+              color: "#e05c5c",
+              fontSize: 13,
+              margin: 0,
+              padding: "4px 0",
+            }}
+          >
             Unable to fetch — check your connection and try again.
           </p>
-        ) : visibleMacroList.map((m) => {
-          const consumed = totals[m.key];
-          const rawMax = goals[m.key];
-          const minVal = goals[m.minKey] ?? null;
-          const isTracked = !!(rawMax || minVal);
-          const maxVal = rawMax || 1;
-          const pct = isTracked ? Math.min(100, (consumed / maxVal) * 100) : 0;
-          const minPct = (isTracked && minVal != null) ? Math.min(100, (minVal / maxVal) * 100) : null;
-          const over = isTracked && consumed > maxVal;
-          const under = isTracked && minVal != null && consumed < minVal;
+        ) : (
+          visibleMacroList.map((m) => {
+            const consumed = totals[m.key];
+            const rawMax = goals[m.key];
+            const minVal = goals[m.minKey] ?? null;
+            const isTracked = !!(rawMax || minVal);
+            const maxVal = rawMax || 1;
+            const pct = isTracked
+              ? Math.min(100, (consumed / maxVal) * 100)
+              : 0;
+            const minPct =
+              isTracked && minVal != null
+                ? Math.min(100, (minVal / maxVal) * 100)
+                : null;
+            const over = isTracked && consumed > maxVal;
+            const under = isTracked && minVal != null && consumed < minVal;
 
-          const dir = goals[m.dirKey] ?? m.defaultDir;
-          let statusColor;
-          if (!isTracked) {
-            statusColor = "#aaa";
-          } else if (minVal != null) {
-            statusColor = over ? "#e05c5c" : under ? "#f0a500" : "#5cb85c";
-          } else {
-            const met = dir === "above" ? consumed >= maxVal : consumed <= maxVal;
-            statusColor = met ? "#5cb85c" : "#e05c5c";
-          }
+            const dir = goals[m.dirKey] ?? m.defaultDir;
+            let statusColor;
+            if (!isTracked) {
+              statusColor = "#aaa";
+            } else if (minVal != null) {
+              statusColor = over ? "#e05c5c" : under ? "#f0a500" : "#5cb85c";
+            } else {
+              const met =
+                dir === "above" ? consumed >= maxVal : consumed <= maxVal;
+              statusColor = met ? "#5cb85c" : "#e05c5c";
+            }
 
-          return (
-            <div key={m.key} style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5, fontSize: 13 }}>
-                <span style={{ fontWeight: 600, color: "#333", display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, display: "inline-block", flexShrink: 0 }} />
-                  {m.label}
-                </span>
-                <span style={{ color: statusColor, fontWeight: isTracked ? 600 : 400 }}>
-                  {m.key === "calories" ? consumed.toFixed(0) : consumed.toFixed(1)}{" "}
-                  {isTracked
-                    ? `/ ${minVal != null ? `${minVal}–${maxVal}` : maxVal} ${m.unit}`
-                    : m.unit}
-                </span>
+            return (
+              <div key={m.key} style={{ marginBottom: 14 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginBottom: 5,
+                    fontSize: 13,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: "#333",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: m.color,
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    />
+                    {m.label}
+                  </span>
+                  <span
+                    style={{
+                      color: statusColor,
+                      fontWeight: isTracked ? 600 : 400,
+                    }}
+                  >
+                    {m.key === "calories"
+                      ? consumed.toFixed(0)
+                      : consumed.toFixed(1)}{" "}
+                    {isTracked
+                      ? `/ ${minVal != null ? `${minVal}–${maxVal}` : maxVal} ${m.unit}`
+                      : m.unit}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 8,
+                    background: "#f0f0f0",
+                    borderRadius: 99,
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {isTracked &&
+                    (() => {
+                      const actualPct = Math.min(
+                        100,
+                        (actualTotals[m.key] / maxVal) * 100,
+                      );
+                      const plannedPct = planMode
+                        ? Math.min(100 - actualPct, pct - actualPct)
+                        : 0;
+                      return (
+                        <>
+                          <div
+                            style={{
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              height: "100%",
+                              width: `${actualPct}%`,
+                              background: m.color,
+                              transition: "width 0.3s ease",
+                            }}
+                          />
+                          {plannedPct > 0 && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: `${actualPct}%`,
+                                top: 0,
+                                height: "100%",
+                                width: `${plannedPct}%`,
+                                background: "#93c5fd",
+                                transition: "width 0.3s ease",
+                              }}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
+                  {minPct != null && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: `${minPct}%`,
+                        top: -1,
+                        bottom: -1,
+                        width: 2,
+                        background: "rgba(0,0,0,0.25)",
+                        borderRadius: 1,
+                        zIndex: 1,
+                      }}
+                    />
+                  )}
+                </div>
               </div>
-              <div style={{ height: 8, background: "#f0f0f0", borderRadius: 99, position: "relative", overflow: "hidden" }}>
-                {isTracked && (() => {
-                  const actualPct = Math.min(100, (actualTotals[m.key] / maxVal) * 100);
-                  const plannedPct = planMode ? Math.min(100 - actualPct, pct - actualPct) : 0;
-                  return (
-                    <>
-                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${actualPct}%`, background: m.color, transition: "width 0.3s ease" }} />
-                      {plannedPct > 0 && (
-                        <div style={{ position: "absolute", left: `${actualPct}%`, top: 0, height: "100%", width: `${plannedPct}%`, background: "#93c5fd", transition: "width 0.3s ease" }} />
-                      )}
-                    </>
-                  );
-                })()}
-                {minPct != null && (
-                  <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.25)", borderRadius: 1, zIndex: 1 }} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Daily weigh-in prompt */}
-      {user && entriesLoaded && entries.length === 0
-        && !weightDismissed
-        && (!goals.next_weigh_in_date || todayStr() >= goals.next_weigh_in_date)
-        && !goals.hide_weight_prompt && (
-        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", marginBottom: 24 }}>
-          <p style={{ fontWeight: 700, fontSize: 15, margin: "0 0 2px", color: "#333" }}>How much do you weigh today?</p>
-          <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 14px" }}>Tracking your weight helps monitor progress over time.</p>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={weightInput}
-              onChange={e => setWeightInput(e.target.value)}
-              placeholder={goals.preferred_weight_unit === "lbs" ? "e.g. 170" : "e.g. 77"}
-              style={{ ...inputStyle(), flex: 1 }}
-            />
-            <span style={{ color: "#888", fontSize: 14, flexShrink: 0 }}>{goals.preferred_weight_unit || "kg"}</span>
-            <button
-              type="button"
-              onClick={handleLogWeight}
-              style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontWeight: 700, cursor: "pointer", fontSize: 14, flexShrink: 0 }}
+      {user &&
+        entriesLoaded &&
+        entries.length === 0 &&
+        !weightDismissed &&
+        (!goals.next_weigh_in_date || todayStr() >= goals.next_weigh_in_date) &&
+        !goals.hide_weight_prompt && (
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 10,
+              padding: "16px 20px",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.07)",
+              marginBottom: 24,
+            }}
+          >
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: 15,
+                margin: "0 0 2px",
+                color: "#333",
+              }}
             >
-              Log
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
-            <button
-              type="button"
-              onClick={async () => {
-                setWeightDismissed(true);
-                localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr());
-                if (user) {
-                  const nextDate = tomorrowStr();
-                  await supabase.from("nutrition_goals").upsert(
-                    { user_id: user.id, next_weigh_in_date: nextDate },
-                    { onConflict: "user_id" }
-                  );
-                  setGoals(g => ({ ...g, next_weigh_in_date: nextDate }));
+              How much do you weigh today?
+            </p>
+            <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 14px" }}>
+              Tracking your weight helps monitor progress over time.
+            </p>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                placeholder={
+                  goals.preferred_weight_unit === "lbs" ? "e.g. 170" : "e.g. 77"
                 }
-              }}
-              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
-            >
-              Skip today
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                if (!user) return;
-                await supabase.from("nutrition_goals").upsert({ user_id: user.id, hide_weight_prompt: true }, { onConflict: "user_id" });
-                setGoals(g => ({ ...g, hide_weight_prompt: true }));
-              }}
-              style={{ background: "none", border: "none", color: "#bbb", fontSize: 12, cursor: "pointer", padding: 0 }}
-            >
-              Turn off reminders
-            </button>
+                style={{ ...inputStyle(), flex: 1 }}
+              />
+              <span style={{ color: "#888", fontSize: 14, flexShrink: 0 }}>
+                {goals.preferred_weight_unit || "kg"}
+              </span>
+              <button
+                type="button"
+                onClick={handleLogWeight}
+                style={{
+                  background: "#ff8c42",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "10px 18px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  flexShrink: 0,
+                }}
+              >
+                Log
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  setWeightDismissed(true);
+                  localStorage.setItem(WEIGHT_DISMISS_KEY, todayStr());
+                  if (user) {
+                    const nextDate = tomorrowStr();
+                    await supabase
+                      .from("nutrition_goals")
+                      .upsert(
+                        { user_id: user.id, next_weigh_in_date: nextDate },
+                        { onConflict: "user_id" },
+                      );
+                    setGoals((g) => ({ ...g, next_weigh_in_date: nextDate }));
+                  }
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#bbb",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Skip today
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!user) return;
+                  await supabase
+                    .from("nutrition_goals")
+                    .upsert(
+                      { user_id: user.id, hide_weight_prompt: true },
+                      { onConflict: "user_id" },
+                    );
+                  setGoals((g) => ({ ...g, hide_weight_prompt: true }));
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#bbb",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Turn off reminders
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Entry Form */}
       <div
@@ -1546,7 +2119,10 @@ export default function Nutrition() {
                 setUsdaQuery(q);
                 clearTimeout(usdaDebounce.current);
                 if (q.trim().length >= 2) {
-                  usdaDebounce.current = setTimeout(() => searchUSDA(q.trim()), 400);
+                  usdaDebounce.current = setTimeout(
+                    () => searchUSDA(q.trim()),
+                    400,
+                  );
                 } else {
                   setUsdaResults([]);
                   setUsdaOpen(false);
@@ -1598,8 +2174,12 @@ export default function Nutrition() {
                   return (
                     <div
                       key={food.fdcId}
-                      onMouseEnter={() => { if (!isMobile) setHoveredFood(food); }}
-                      onMouseLeave={() => { if (!isMobile) setHoveredFood(null); }}
+                      onMouseEnter={() => {
+                        if (!isMobile) setHoveredFood(food);
+                      }}
+                      onMouseLeave={() => {
+                        if (!isMobile) setHoveredFood(null);
+                      }}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1620,14 +2200,28 @@ export default function Nutrition() {
                           minWidth: 0,
                         }}
                       >
-                        <span style={{ fontWeight: 600 }}>{food.description}</span>
+                        <span style={{ fontWeight: 600 }}>
+                          {food.description}
+                        </span>
                         {food.brandOwner && (
-                          <span style={{ color: "#aaa", marginLeft: 8, fontSize: 12 }}>
+                          <span
+                            style={{
+                              color: "#aaa",
+                              marginLeft: 8,
+                              fontSize: 12,
+                            }}
+                          >
                             {food.brandOwner}
                           </span>
                         )}
                         {kcal != null && (
-                          <span style={{ color: "#ff8c42", marginLeft: 8, fontSize: 12 }}>
+                          <span
+                            style={{
+                              color: "#ff8c42",
+                              marginLeft: 8,
+                              fontSize: 12,
+                            }}
+                          >
                             {Math.round(kcal)} kcal
                           </span>
                         )}
@@ -1761,28 +2355,79 @@ export default function Nutrition() {
             }}
             title="My Food Library"
           >
-            {myFoodsOpen ? <MdKeyboardArrowUp size={20} /> : <MdKeyboardArrowDown size={20} />}
+            {myFoodsOpen ? (
+              <MdKeyboardArrowUp size={20} />
+            ) : (
+              <MdKeyboardArrowDown size={20} />
+            )}
           </button>
         </div>
 
         {selectedUsdaFood && (
-          <div style={{ marginTop: 14, background: "#f7f7fb", borderRadius: 10, padding: "14px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+          <div
+            style={{
+              marginTop: 14,
+              background: "#f7f7fb",
+              borderRadius: 10,
+              padding: "14px 16px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: 12,
+              }}
+            >
               <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "#333" }}>{selectedUsdaFood.description}</p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: "#333",
+                  }}
+                >
+                  {selectedUsdaFood.description}
+                </p>
                 {selectedUsdaFood.brandOwner && (
-                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "#aaa" }}>{selectedUsdaFood.brandOwner}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "#aaa" }}>
+                    {selectedUsdaFood.brandOwner}
+                  </p>
                 )}
               </div>
               <button
                 type="button"
-                onClick={() => { setSelectedUsdaFood(null); setServingInput(""); }}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}
-              >✕</button>
+                onClick={() => {
+                  setSelectedUsdaFood(null);
+                  setServingInput("");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#bbb",
+                  fontSize: 18,
+                  lineHeight: 1,
+                  padding: "2px 4px",
+                }}
+              >
+                ✕
+              </button>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-              <span style={{ fontSize: 13, color: "#555", flexShrink: 0 }}>Serving size</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 14,
+              }}
+            >
+              <span style={{ fontSize: 13, color: "#555", flexShrink: 0 }}>
+                Serving size
+              </span>
               {selectedUsdaFood.servingSize ? (
                 <div style={{ display: "flex" }}>
                   <input
@@ -1791,28 +2436,80 @@ export default function Nutrition() {
                     step="any"
                     value={servingInput}
                     onChange={(e) => setServingInput(e.target.value)}
-                    style={{ width: 70, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", borderRight: "none", fontSize: 16, outline: "none", background: "#fff" }}
+                    style={{
+                      width: 70,
+                      padding: "5px 8px",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: "6px 0 0 6px",
+                      borderRight: "none",
+                      fontSize: 16,
+                      outline: "none",
+                      background: "#fff",
+                    }}
                   />
-                  {isFromBarcode && unitFactor((selectedUsdaFood.servingSizeUnit || "g").toLowerCase()) != null ? (
+                  {isFromBarcode &&
+                  unitFactor(
+                    (selectedUsdaFood.servingSizeUnit || "g").toLowerCase(),
+                  ) != null ? (
                     <select
                       value={barcodeUnit}
                       onChange={(e) => setBarcodeUnit(e.target.value)}
-                      style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#555", background: "#fafafa", cursor: "pointer", appearance: "none", minWidth: 42 }}
+                      style={{
+                        border: "1px solid #e0e0e0",
+                        borderLeft: "none",
+                        borderRadius: "0 6px 6px 0",
+                        padding: "5px 8px",
+                        fontSize: 13,
+                        color: "#555",
+                        background: "#fafafa",
+                        cursor: "pointer",
+                        appearance: "none",
+                        minWidth: 42,
+                      }}
                     >
-                      {(UNIT_TO_ML[(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()]
+                      {(UNIT_TO_ML[
+                        (selectedUsdaFood.servingSizeUnit || "g").toLowerCase()
+                      ]
                         ? Object.keys(UNIT_TO_ML)
                         : Object.keys(UNIT_TO_G)
-                      ).map((u) => <option key={u} value={u}>{u}</option>)}
+                      ).map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
                     </select>
                   ) : (
-                    <span style={{ border: "1px solid #e0e0e0", borderLeft: "none", borderRadius: "0 6px 6px 0", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
+                    <span
+                      style={{
+                        border: "1px solid #e0e0e0",
+                        borderLeft: "none",
+                        borderRadius: "0 6px 6px 0",
+                        padding: "5px 8px",
+                        fontSize: 13,
+                        color: "#888",
+                        background: "#fafafa",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
                       {(selectedUsdaFood.servingSizeUnit || "g").toLowerCase()}
                     </span>
                   )}
                 </div>
               ) : (
                 <div style={{ display: "flex" }}>
-                  <span style={{ border: "1px solid #e0e0e0", borderRadius: "6px 0 0 6px", padding: "5px 8px", fontSize: 13, color: "#888", background: "#fafafa", display: "flex", alignItems: "center" }}>
+                  <span
+                    style={{
+                      border: "1px solid #e0e0e0",
+                      borderRadius: "6px 0 0 6px",
+                      padding: "5px 8px",
+                      fontSize: 13,
+                      color: "#888",
+                      background: "#fafafa",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
                     ×
                   </span>
                   <input
@@ -1821,13 +2518,26 @@ export default function Nutrition() {
                     step="0.1"
                     value={servingInput}
                     onChange={(e) => setServingInput(e.target.value)}
-                    style={{ width: 60, padding: "5px 8px", border: "1px solid #e0e0e0", borderRadius: "0 6px 6px 0", borderLeft: "none", fontSize: 16, outline: "none", background: "#fff" }}
+                    style={{
+                      width: 60,
+                      padding: "5px 8px",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: "0 6px 6px 0",
+                      borderLeft: "none",
+                      fontSize: 16,
+                      outline: "none",
+                      background: "#fff",
+                    }}
                   />
                 </div>
               )}
             </div>
 
-            <UsdaNutrientCard food={selectedUsdaFood} scale={usdaScale} inline />
+            <UsdaNutrientCard
+              food={selectedUsdaFood}
+              scale={usdaScale}
+              inline
+            />
 
             <button
               type="button"
@@ -1850,11 +2560,34 @@ export default function Nutrition() {
         )}
 
         {myFoodsOpen && (
-          <div ref={libraryRef} style={{ background: "#f0f4ff", borderRadius: 10, marginTop: 14, padding: "14px 0 0" }}>
-            <div style={{ padding: "0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div
+            ref={libraryRef}
+            style={{
+              background: "#ffffff",
+              borderRadius: 10,
+              marginTop: 14,
+              padding: "14px 0 0",
+            }}
+          >
+            <div
+              style={{
+                padding: "0 0px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 10,
+              }}
+            >
               <span style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
                 My Food Library
-                <span style={{ fontSize: 12, fontWeight: 400, color: "#aaa", marginLeft: 6 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 400,
+                    color: "#aaa",
+                    marginLeft: 6,
+                  }}
+                >
                   {savedFoods.length} saved
                 </span>
               </span>
@@ -1862,273 +2595,361 @@ export default function Nutrition() {
             {!libraryLoaded ? (
               <div style={{ padding: "6px 16px 16px" }}>
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="skeleton-shimmer" style={{ height: 44, borderRadius: 8, marginBottom: 8 }} />
+                  <div
+                    key={i}
+                    className="skeleton-shimmer"
+                    style={{ height: 44, borderRadius: 8, marginBottom: 8 }}
+                  />
                 ))}
               </div>
             ) : libraryError ? (
-              <p style={{ color: "#e05c5c", fontSize: 13, padding: "12px 16px 16px", margin: 0, textAlign: "center" }}>
-                Unable to fetch food library — check your connection and try again.
+              <p
+                style={{
+                  color: "#e05c5c",
+                  fontSize: 13,
+                  padding: "12px 16px 16px",
+                  margin: 0,
+                  textAlign: "center",
+                }}
+              >
+                Unable to fetch food library — check your connection and try
+                again.
               </p>
             ) : savedFoods.length === 0 ? (
-            <p
-              style={{
-                textAlign: "center",
-                color: "#bbb",
-                padding: "20px 16px",
-                margin: 0,
-                fontSize: 14,
-              }}
-            >
-              No saved foods yet — check "Save to My Food Library" when adding an
-              entry.
-            </p>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10, minWidth: 0, padding: "0 16px" }}>
-                <input
-                  type="text"
-                  value={myFoodsSearch}
-                  onChange={(e) => setMyFoodsSearch(e.target.value)}
-                  placeholder="Search saved foods…"
-                  style={{ flex: 1, minWidth: 0, padding: "6px 10px", fontSize: 16, border: "1px solid #c8d8ff", borderRadius: 7, outline: "none", background: "#fff" }}
-                />
-                <select
-                  value={myFoodsSort}
-                  onChange={(e) => setMyFoodsSort(e.target.value)}
-                  disabled={!!myFoodsSearch.trim()}
-                  title={myFoodsSearch.trim() ? "Sort disabled while searching" : undefined}
-                  style={{ maxWidth: 130, padding: "6px 8px", fontSize: 16, border: "1px solid #c8d8ff", borderRadius: 7, background: "#fff", cursor: myFoodsSearch.trim() ? "default" : "pointer", outline: "none", color: myFoodsSearch.trim() ? "#bbb" : "#555", opacity: myFoodsSearch.trim() ? 0.5 : 1 }}
-                >
-                  <option value="name_asc">Name A→Z</option>
-                  <option value="name_desc">Name Z→A</option>
-                  <option value="protein_cal">Protein / Cal ratio</option>
-                  <option value="calories">Highest Calories</option>
-                  <option value="protein">Highest Protein</option>
-                  <option value="fat">Highest Fat</option>
-                  <option value="fiber">Highest Fiber</option>
-                  <option value="carbs">Highest Carbs</option>
-                  <option value="sugar">Highest Sugar</option>
-                </select>
-              </div>
-            <div style={{ padding: "0 0 16px", maxHeight: 340, overflowY: "auto", overflowX: "hidden" }}>
-              {filteredSortedFoods.length === 0 && (
-                <p style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "12px 0", margin: 0 }}>
-                  No foods match your search.
-                </p>
-              )}
-              {filteredSortedFoods.map((food) => {
-                const normalizedFood = {
-                  id: food.id,
-                  description: food.name,
-                  servingSize: food.serving_amount,
-                  servingSizeUnit: food.serving_unit,
-                  foodNutrients: [
-                    { nutrientNumber: "208", value: food.calories },
-                    { nutrientNumber: "203", value: food.protein },
-                    { nutrientNumber: "205", value: food.carbs },
-                    { nutrientNumber: "204", value: food.fat },
-                    { nutrientNumber: "291", value: food.fiber },
-                    { nutrientNumber: "269", value: food.sugar },
-                  ],
-                };
-                return (
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#bbb",
+                  padding: "20px 16px",
+                  margin: 0,
+                  fontSize: 14,
+                }}
+              >
+                No saved foods yet — check "Save to My Food Library" when adding
+                an entry.
+              </p>
+            ) : (
+              <>
                 <div
-                  key={food.id}
-                  title="Click to compare with another item"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    if (e.target.closest("input, button, select")) return;
-                    if (pinnedFood?.id === food.id) {
-                      setPinnedFood(null);
-                      setHoveredFood(null);
-                      setPinnedLibraryFood(null);
-                    } else {
-                      setPinnedFood(normalizedFood);
-                      setPinnedLibraryFood(food);
-                    }
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isMobile) return;
-                    if (e.target.closest("input, button, select")) return;
-                    setHoveredFood(normalizedFood);
-                    setHoveredLibraryId(food.id);
-                  }}
-                  onMouseLeave={() => { if (isMobile) return; setHoveredFood(null); setHoveredLibraryId(null); }}
                   style={{
-                    position: "relative",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "9px 10px",
-                    borderRadius: 8,
-                    marginBottom: 6,
-                    background: hoveredLibraryId === food.id ? "#dce8ff" : "#fff",
-                    border: `1px solid ${hoveredLibraryId === food.id ? "#4f8ef7" : "#d0dcff"}`,
-                    cursor: "pointer",
-                    transition: "background 0.15s, border-color 0.15s",
+                    gap: 8,
+                    marginBottom: 10,
+                    minWidth: 0,
+                    paddingRight: "14px",
                   }}
                 >
-                  <div>
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>
-                      {food.name}
-                    </span>
-                    <span
-                      style={{ fontSize: 12, color: "#aaa", marginLeft: 10 }}
-                    >
-                      {food.calories} kcal
-                      {food.protein > 0 && ` · ${food.protein}g protein`}
-                      {food.carbs > 0 && ` · ${food.carbs}g carbs`}
-                      {food.fat > 0 && ` · ${food.fat}g fat`}
-                    </span>
-                  </div>
-                  <div
+                  <input
+                    type="text"
+                    value={myFoodsSearch}
+                    onChange={(e) => setMyFoodsSearch(e.target.value)}
+                    placeholder="Search saved foods…"
                     style={{
-                      display: "flex",
-                      gap: 6,
-                      flexShrink: 0,
-                      alignItems: "center",
+                      flex: 1,
+                      minWidth: 0,
+                      padding: "6px 10px",
+                      fontSize: 16,
+                      border: "1px solid #c8d8ff",
+                      borderRadius: 7,
+                      outline: "none",
+                      background: "#fff",
+                    }}
+                  />
+                  <select
+                    value={myFoodsSort}
+                    onChange={(e) => setMyFoodsSort(e.target.value)}
+                    disabled={!!myFoodsSearch.trim()}
+                    title={
+                      myFoodsSearch.trim()
+                        ? "Sort disabled while searching"
+                        : undefined
+                    }
+                    style={{
+                      maxWidth: 130,
+                      padding: "6px 8px",
+                      fontSize: 16,
+                      border: "1px solid #c8d8ff",
+                      borderRadius: 7,
+                      background: "#fff",
+                      cursor: myFoodsSearch.trim() ? "default" : "pointer",
+                      outline: "none",
+                      color: myFoodsSearch.trim() ? "#bbb" : "#555",
+                      opacity: myFoodsSearch.trim() ? 0.5 : 1,
                     }}
                   >
-                    {food.serving_amount && food.serving_unit !== "×" ? (
-                      <div style={{ display: "flex" }}>
-                        <input
-                          type="number"
-                          min="0"
-                          value={libraryAmounts[food.name] ?? food.serving_amount}
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) =>
-                            setLibraryAmounts((prev) => ({
-                              ...prev,
-                              [food.name]: e.target.value,
-                            }))
+                    <option value="name_asc">Name A→Z</option>
+                    <option value="name_desc">Name Z→A</option>
+                    <option value="protein_cal">Protein / Cal ratio</option>
+                    <option value="calories">Highest Calories</option>
+                    <option value="protein">Highest Protein</option>
+                    <option value="fat">Highest Fat</option>
+                    <option value="fiber">Highest Fiber</option>
+                    <option value="carbs">Highest Carbs</option>
+                    <option value="sugar">Highest Sugar</option>
+                  </select>
+                </div>
+                <div
+                  style={{
+                    padding: "0 0 16px",
+                    maxHeight: 340,
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                  }}
+                >
+                  {filteredSortedFoods.length === 0 && (
+                    <p
+                      style={{
+                        textAlign: "center",
+                        color: "#bbb",
+                        fontSize: 13,
+                        padding: "12px 0",
+                        margin: 0,
+                      }}
+                    >
+                      No foods match your search.
+                    </p>
+                  )}
+                  {filteredSortedFoods.map((food) => {
+                    const normalizedFood = {
+                      id: food.id,
+                      description: food.name,
+                      servingSize: food.serving_amount,
+                      servingSizeUnit: food.serving_unit,
+                      foodNutrients: [
+                        { nutrientNumber: "208", value: food.calories },
+                        { nutrientNumber: "203", value: food.protein },
+                        { nutrientNumber: "205", value: food.carbs },
+                        { nutrientNumber: "204", value: food.fat },
+                        { nutrientNumber: "291", value: food.fiber },
+                        { nutrientNumber: "269", value: food.sugar },
+                      ],
+                    };
+                    return (
+                      <div
+                        key={food.id}
+                        title="Click to compare with another item"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          if (e.target.closest("input, button, select")) return;
+                          if (pinnedFood?.id === food.id) {
+                            setPinnedFood(null);
+                            setHoveredFood(null);
+                            setPinnedLibraryFood(null);
+                          } else {
+                            setPinnedFood(normalizedFood);
+                            setPinnedLibraryFood(food);
                           }
-                          style={{
-                            ...inputStyle(),
-                            width: 60,
-                            borderRadius: "6px 0 0 6px",
-                            borderRight: "none",
-                            padding: "4px 6px",
-                            fontSize: 16,
-                          }}
-                        />
-                        {food.serving_weight_g && UNIT_TO_G[food.serving_unit] ? (
-                          <select
-                            value={libraryUnits[food.name] ?? food.serving_unit}
-                            onChange={(e) => setLibraryUnits((prev) => ({ ...prev, [food.name]: e.target.value }))}
-                            style={{
-                              border: "1px solid #e0e0e0",
-                              borderLeft: "none",
-                              borderRadius: "0 6px 6px 0",
-                              padding: "4px 6px",
-                              fontSize: 12,
-                              color: "#555",
-                              background: "#fafafa",
-                              cursor: "pointer",
-                              appearance: "none",
-                              minWidth: 38,
-                            }}
-                          >
-                            {Object.keys(UNIT_TO_G).map((u) => <option key={u} value={u}>{u}</option>)}
-                          </select>
-                        ) : (
+                        }}
+                        onMouseEnter={(e) => {
+                          if (isMobile) return;
+                          if (e.target.closest("input, button, select")) return;
+                          setHoveredFood(normalizedFood);
+                          setHoveredLibraryId(food.id);
+                        }}
+                        onMouseLeave={() => {
+                          if (isMobile) return;
+                          setHoveredFood(null);
+                          setHoveredLibraryId(null);
+                        }}
+                        style={{
+                          position: "relative",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "9px 10px",
+                          borderRadius: 8,
+                          marginBottom: 6,
+                          background:
+                            hoveredLibraryId === food.id
+                              ? "#dce8ff"
+                              : "rgb(245, 250, 255)",
+                          border: `1px solid ${hoveredLibraryId === food.id ? "#4f8ef7" : "#d0dcff"}`,
+                          cursor: "pointer",
+                          transition: "background 0.15s, border-color 0.15s",
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>
+                            {food.name}
+                          </span>
                           <span
                             style={{
-                              border: "1px solid #e0e0e0",
-                              borderLeft: "none",
-                              borderRadius: "0 6px 6px 0",
-                              padding: "4px 7px",
                               fontSize: 12,
-                              color: "#888",
-                              background: "#fafafa",
-                              display: "flex",
-                              alignItems: "center",
+                              color: "#aaa",
+                              marginLeft: 10,
                             }}
                           >
-                            {food.serving_unit || "g"}
+                            {food.calories} kcal
+                            {food.protein > 0 && ` · ${food.protein}g protein`}
+                            {food.carbs > 0 && ` · ${food.carbs}g carbs`}
+                            {food.fat > 0 && ` · ${food.fat}g fat`}
                           </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex" }}>
-                        <span
+                        </div>
+                        <div
                           style={{
-                            border: "1px solid #e0e0e0",
-                            borderRadius: "6px 0 0 6px",
-                            padding: "4px 7px",
-                            fontSize: 12,
-                            color: "#888",
-                            background: "#fafafa",
                             display: "flex",
+                            gap: 6,
+                            flexShrink: 0,
                             alignItems: "center",
                           }}
                         >
-                          ×
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={libraryAmounts[food.name] ?? 1}
-                          onFocus={(e) => e.target.select()}
-                          onChange={(e) =>
-                            setLibraryAmounts((prev) => ({
-                              ...prev,
-                              [food.name]: e.target.value,
-                            }))
-                          }
-                          style={{
-                            ...inputStyle(),
-                            width: 52,
-                            borderRadius: "0 6px 6px 0",
-                            borderLeft: "none",
-                            padding: "4px 6px",
-                            fontSize: 16,
-                          }}
-                        />
+                          {food.serving_amount && food.serving_unit !== "×" ? (
+                            <div style={{ display: "flex" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                value={
+                                  libraryAmounts[food.name] ??
+                                  food.serving_amount
+                                }
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) =>
+                                  setLibraryAmounts((prev) => ({
+                                    ...prev,
+                                    [food.name]: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  ...inputStyle(),
+                                  width: 60,
+                                  borderRadius: "6px 0 0 6px",
+                                  borderRight: "none",
+                                  padding: "4px 6px",
+                                  fontSize: 16,
+                                }}
+                              />
+                              {food.serving_weight_g &&
+                              UNIT_TO_G[food.serving_unit] ? (
+                                <select
+                                  value={
+                                    libraryUnits[food.name] ?? food.serving_unit
+                                  }
+                                  onChange={(e) =>
+                                    setLibraryUnits((prev) => ({
+                                      ...prev,
+                                      [food.name]: e.target.value,
+                                    }))
+                                  }
+                                  style={{
+                                    border: "1px solid #e0e0e0",
+                                    borderLeft: "none",
+                                    borderRadius: "0 6px 6px 0",
+                                    padding: "4px 6px",
+                                    fontSize: 12,
+                                    color: "#555",
+                                    background: "#fafafa",
+                                    cursor: "pointer",
+                                    appearance: "none",
+                                    minWidth: 38,
+                                  }}
+                                >
+                                  {Object.keys(UNIT_TO_G).map((u) => (
+                                    <option key={u} value={u}>
+                                      {u}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  style={{
+                                    border: "1px solid #e0e0e0",
+                                    borderLeft: "none",
+                                    borderRadius: "0 6px 6px 0",
+                                    padding: "4px 7px",
+                                    fontSize: 12,
+                                    color: "#888",
+                                    background: "#fafafa",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  {food.serving_unit || "g"}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex" }}>
+                              <span
+                                style={{
+                                  border: "1px solid #e0e0e0",
+                                  borderRadius: "6px 0 0 6px",
+                                  padding: "4px 7px",
+                                  fontSize: 12,
+                                  color: "#888",
+                                  background: "#fafafa",
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                ×
+                              </span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={libraryAmounts[food.name] ?? 1}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) =>
+                                  setLibraryAmounts((prev) => ({
+                                    ...prev,
+                                    [food.name]: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  ...inputStyle(),
+                                  width: 52,
+                                  borderRadius: "0 6px 6px 0",
+                                  borderLeft: "none",
+                                  padding: "4px 6px",
+                                  fontSize: 16,
+                                }}
+                              />
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleAddFromLibrary(food)}
+                            style={{
+                              background: "#ff8c42",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 6,
+                              padding: "5px 12px",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            + Add
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm("Remove from My Food Library?")
+                              )
+                                handleDeleteSaved(food.id);
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#ccc",
+                              lineHeight: 1,
+                              padding: "4px 6px",
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                            title="Remove from My Food Library"
+                          >
+                            <MdDeleteOutline size={18} />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    <button
-                      onClick={() => handleAddFromLibrary(food)}
-                      style={{
-                        background: "#ff8c42",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "5px 12px",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    >
-                      + Add
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm("Remove from My Food Library?"))
-                          handleDeleteSaved(food.id);
-                      }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#ccc",
-                        lineHeight: 1,
-                        padding: "4px 6px",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                      title="Remove from My Food Library"
-                    >
-                      <MdDeleteOutline size={18} />
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
-                );
-              })}
-            </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
         )}
         {!isMobile && compareFood ? (
           <NutrientCompare
@@ -2152,19 +2973,44 @@ export default function Nutrition() {
         ) : !isMobile && pinnedFood ? (
           <UsdaNutrientCard
             food={pinnedFood}
-            onClose={() => { setPinnedFood(null); setPinnedLibraryFood(null); }}
-            onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
+            onClose={() => {
+              setPinnedFood(null);
+              setPinnedLibraryFood(null);
+            }}
+            onCompare={() => {
+              setCompareFood(pinnedFood);
+              setPinnedFood(null);
+            }}
             onEdit={pinnedLibraryFood ? openEditFromPinned : undefined}
-            style={libraryRef.current && containerRef.current
-              ? { top: libraryRef.current.getBoundingClientRect().top - containerRef.current.getBoundingClientRect().top }
-              : undefined}
+            style={
+              libraryRef.current && containerRef.current
+                ? {
+                    top:
+                      libraryRef.current.getBoundingClientRect().top -
+                      containerRef.current.getBoundingClientRect().top,
+                  }
+                : undefined
+            }
           />
         ) : !isMobile && hoveredFood ? (
           <UsdaNutrientCard
             food={hoveredFood}
-            style={hoveredLibraryId != null && libraryRef.current && containerRef.current
-              ? { top: libraryRef.current.getBoundingClientRect().top - containerRef.current.getBoundingClientRect().top }
-              : undefined}
+            onCompare={() => {
+              setCompareFood(hoveredFood);
+              setHoveredFood(null);
+              setHoveredLibraryId(null);
+            }}
+            style={
+              hoveredLibraryId != null &&
+              libraryRef.current &&
+              containerRef.current
+                ? {
+                    top:
+                      libraryRef.current.getBoundingClientRect().top -
+                      containerRef.current.getBoundingClientRect().top,
+                  }
+                : undefined
+            }
           />
         ) : null}
       </div>
@@ -2172,11 +3018,18 @@ export default function Nutrition() {
       {/* Mobile bottom sheet for pinned food */}
       {isMobile && pinnedFood && (
         <div
-          onMouseDown={() => { setPinnedFood(null); setHoveredFood(null); setPinnedLibraryFood(null); }}
+          onMouseDown={() => {
+            setPinnedFood(null);
+            setHoveredFood(null);
+            setPinnedLibraryFood(null);
+          }}
           style={{
-            position: "fixed", inset: 0, zIndex: 400,
+            position: "fixed",
+            inset: 0,
+            zIndex: 400,
             background: "rgba(0,0,0,0.45)",
-            display: "flex", alignItems: "flex-end",
+            display: "flex",
+            alignItems: "flex-end",
           }}
         >
           <div
@@ -2190,14 +3043,17 @@ export default function Nutrition() {
             onTouchMove={(e) => {
               if (pinnedDragStart.current === null) return;
               const dy = e.touches[0].clientY - pinnedDragStart.current;
-              if (dy > 0) pinnedSheetRef.current.style.transform = `translateY(${dy}px)`;
+              if (dy > 0)
+                pinnedSheetRef.current.style.transform = `translateY(${dy}px)`;
             }}
             onTouchEnd={(e) => {
               if (pinnedDragStart.current === null) return;
               const dy = e.changedTouches[0].clientY - pinnedDragStart.current;
               pinnedDragStart.current = null;
               if (dy > 80) {
-                setPinnedFood(null); setHoveredFood(null); setPinnedLibraryFood(null);
+                setPinnedFood(null);
+                setHoveredFood(null);
+                setPinnedLibraryFood(null);
               } else {
                 pinnedSheetRef.current.style.transition = "transform 0.2s";
                 pinnedSheetRef.current.style.transform = "";
@@ -2213,15 +3069,41 @@ export default function Nutrition() {
               boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 18,
+              }}
+            >
               <div style={{ flex: 1 }} />
-              <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0" }} />
-              <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 99,
+                  background: "#e0e0e0",
+                }}
+              />
+              <div
+                style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}
+              >
                 {pinnedLibraryFood && (
                   <button
-                    onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); openEditFromPinned(); }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openEditFromPinned();
+                    }}
                     onClick={openEditFromPinned}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", padding: "8px 4px", lineHeight: 1 }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#aaa",
+                      padding: "8px 4px",
+                      lineHeight: 1,
+                    }}
                   >
                     <MdEdit size={22} />
                   </button>
@@ -2230,8 +3112,16 @@ export default function Nutrition() {
             </div>
             <UsdaNutrientCard
               food={pinnedFood}
-              onCompare={() => { setCompareFood(pinnedFood); setPinnedFood(null); }}
-              style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
+              onCompare={() => {
+                setCompareFood(pinnedFood);
+                setPinnedFood(null);
+              }}
+              style={{
+                position: "static",
+                boxShadow: "none",
+                padding: 0,
+                minWidth: 0,
+              }}
             />
           </div>
         </div>
@@ -2242,9 +3132,12 @@ export default function Nutrition() {
         <div
           onMouseDown={() => setCompareFood(null)}
           style={{
-            position: "fixed", inset: 0, zIndex: 400,
+            position: "fixed",
+            inset: 0,
+            zIndex: 400,
             background: "rgba(0,0,0,0.45)",
-            display: "flex", alignItems: "flex-end",
+            display: "flex",
+            alignItems: "flex-end",
           }}
         >
           <div
@@ -2259,7 +3152,15 @@ export default function Nutrition() {
               boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
             }}
           >
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 99,
+                background: "#e0e0e0",
+                margin: "0 auto 18px",
+              }}
+            />
             <NutrientCompare
               foodA={compareFood}
               onClose={() => setCompareFood(null)}
@@ -2277,7 +3178,12 @@ export default function Nutrition() {
                   { nutrientNumber: "269", value: f.sugar },
                 ],
               }))}
-              style={{ position: "static", boxShadow: "none", padding: 0, minWidth: 0 }}
+              style={{
+                position: "static",
+                boxShadow: "none",
+                padding: 0,
+                minWidth: 0,
+              }}
             />
           </div>
         </div>
@@ -2287,15 +3193,50 @@ export default function Nutrition() {
       {editingLibraryFood && (
         <div
           onMouseDown={() => setEditingLibraryFood(null)}
-          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 500,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
         >
           <div
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              padding: "22px 20px 24px",
+              width: "100%",
+              maxWidth: 380,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 18,
+              }}
+            >
               <span style={{ fontWeight: 700, fontSize: 16 }}>Edit Food</span>
-              <button onClick={() => setEditingLibraryFood(null)} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#aaa" }}>✕</button>
+              <button
+                onClick={() => setEditingLibraryFood(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 16,
+                  cursor: "pointer",
+                  color: "#aaa",
+                }}
+              >
+                ✕
+              </button>
             </div>
             {[
               { key: "name", label: "Name", type: "text" },
@@ -2307,46 +3248,129 @@ export default function Nutrition() {
               { key: "sugar", label: "Sugar (g)", type: "number" },
             ].map(({ key, label, type }) => (
               <div key={key} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>{label}</label>
+                <label
+                  style={{
+                    fontSize: 12,
+                    color: "#888",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  {label}
+                </label>
                 <input
                   type={type}
                   value={editForm[key]}
-                  onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box" }}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, [key]: e.target.value }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
                 />
               </div>
             ))}
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Serving amount</label>
+                <label
+                  style={{
+                    fontSize: 12,
+                    color: "#888",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Serving amount
+                </label>
                 <input
                   type="number"
                   value={editForm.serving_amount}
-                  onChange={(e) => setEditForm((f) => ({ ...f, serving_amount: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box" }}
+                  onChange={(e) =>
+                    setEditForm((f) => ({
+                      ...f,
+                      serving_amount: e.target.value,
+                    }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
                 />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Unit</label>
+                <label
+                  style={{
+                    fontSize: 12,
+                    color: "#888",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Unit
+                </label>
                 <select
                   value={editForm.serving_unit}
-                  onChange={(e) => setEditForm((f) => ({ ...f, serving_unit: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", background: "#fafafa" }}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, serving_unit: e.target.value }))
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    outline: "none",
+                    background: "#fafafa",
+                  }}
                 >
-                  {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {SERVING_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button
                 onClick={() => setEditingLibraryFood(null)}
-                style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 8,
+                  background: "none",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  color: "#555",
+                }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleEditSave}
-                style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                style={{
+                  flex: 2,
+                  padding: "10px 0",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#4f8ef7",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
               >
                 Save
               </button>
@@ -2356,78 +3380,193 @@ export default function Nutrition() {
       )}
 
       {/* Combine entries modal */}
-      {combineModalOpen && (() => {
-        const selected = entries.filter(e => selectedEntryIds.has(e.id));
-        const preview = MACROS.reduce((acc, m) => {
-          acc[m.key] = m.key === "calories"
-            ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
-            : Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10) / 10;
-          return acc;
-        }, {});
-        return (
-          <div
-            onMouseDown={() => setCombineModalOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          >
+      {combineModalOpen &&
+        (() => {
+          const selected = entries.filter((e) => selectedEntryIds.has(e.id));
+          const preview = MACROS.reduce((acc, m) => {
+            acc[m.key] =
+              m.key === "calories"
+                ? Math.round(selected.reduce((s, e) => s + (e[m.key] || 0), 0))
+                : Math.round(
+                    selected.reduce((s, e) => s + (e[m.key] || 0), 0) * 10,
+                  ) / 10;
+            return acc;
+          }, {});
+          return (
             <div
-              onMouseDown={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380 }}
+              onMouseDown={() => setCombineModalOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 500,
+                background: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
             >
-              <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16 }}>Combine {selectedEntryIds.size} entries</p>
-              <p style={{ margin: "0 0 16px", fontSize: 12, color: "#aaa" }}>Give the combined entry a name.</p>
-              <input
-                type="text"
-                placeholder="Combined entry name…"
-                value={combineName}
-                onChange={(e) => setCombineName(e.target.value)}
-                onFocus={(e) => setTimeout(() => e.target.select(), 0)}
-                autoFocus
-                style={{ width: "100%", padding: "9px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", boxSizing: "border-box", marginBottom: 16 }}
-              />
-              <div style={{ background: "#f7f7fb", borderRadius: 10, padding: "10px 14px", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {visibleMacroList.map((m) => (
-                  <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>{m.label}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: m.color }}>{preview[m.key]}</span>
-                    <span style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => setCombineModalOpen(false)}
-                  style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  background: "#fff",
+                  borderRadius: 16,
+                  padding: "22px 20px 24px",
+                  width: "100%",
+                  maxWidth: 380,
+                }}
+              >
+                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16 }}>
+                  Combine {selectedEntryIds.size} entries
+                </p>
+                <p style={{ margin: "0 0 16px", fontSize: 12, color: "#aaa" }}>
+                  Give the combined entry a name.
+                </p>
+                <input
+                  type="text"
+                  placeholder="Combined entry name…"
+                  value={combineName}
+                  onChange={(e) => setCombineName(e.target.value)}
+                  onFocus={(e) => setTimeout(() => e.target.select(), 0)}
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 16,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    marginBottom: 16,
+                  }}
+                />
+                <div
+                  style={{
+                    background: "#f7f7fb",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    marginBottom: 20,
+                    display: "flex",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCombineSelected}
-                  style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-                >
-                  Combine
-                </button>
+                  {visibleMacroList.map((m) => (
+                    <div
+                      key={m.key}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "#bbb",
+                          fontWeight: 600,
+                          marginBottom: 2,
+                        }}
+                      >
+                        {m.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: m.color,
+                        }}
+                      >
+                        {preview[m.key]}
+                      </span>
+                      <span style={{ fontSize: 10, color: "#bbb" }}>
+                        {m.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => setCombineModalOpen(false)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: 8,
+                      background: "none",
+                      fontSize: 14,
+                      cursor: "pointer",
+                      color: "#555",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCombineSelected}
+                    style={{
+                      flex: 2,
+                      padding: "10px 0",
+                      border: "none",
+                      borderRadius: 8,
+                      background: "#4f8ef7",
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Combine
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* Edit plan item modal */}
       {editingPlanItem && (
         <div
           onMouseDown={() => setEditingPlanItem(null)}
-          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 500,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
         >
           <div
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              padding: "22px 20px 24px",
+              width: "100%",
+              maxWidth: 380,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
           >
             <div style={{ marginBottom: 18 }}>
-              <span style={{ fontWeight: 700, fontSize: 16, color: "#4f8ef7" }}>{editingPlanItem?.food_name}</span>
+              <span style={{ fontWeight: 700, fontSize: 16, color: "#4f8ef7" }}>
+                {editingPlanItem?.food_name}
+              </span>
             </div>
 
-            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>
-              {editingPlanItem?.serving_unit === "×" ? "Servings" : "Serving size"}
+            <label
+              style={{
+                fontSize: 12,
+                color: "#888",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              {editingPlanItem?.serving_unit === "×"
+                ? "Servings"
+                : "Serving size"}
             </label>
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               <input
@@ -2435,12 +3574,32 @@ export default function Nutrition() {
                 min="0"
                 step="any"
                 value={editForm.serving_amount ?? ""}
-                onChange={(e) => setEditForm((f) => ({ ...f, serving_amount: e.target.value }))}
+                onChange={(e) =>
+                  setEditForm((f) => ({ ...f, serving_amount: e.target.value }))
+                }
                 onFocus={(e) => setTimeout(() => e.target.select(), 0)}
-                style={{ flex: 1, padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none" }}
+                style={{
+                  flex: 1,
+                  padding: "8px 10px",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 8,
+                  fontSize: 16,
+                  outline: "none",
+                }}
               />
               {editingPlanItem?.serving_unit === "×" ? (
-                <span style={{ display: "flex", alignItems: "center", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, color: "#888", background: "#fafafa" }}>
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "8px 12px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    color: "#888",
+                    background: "#fafafa",
+                  }}
+                >
                   servings
                 </span>
               ) : (
@@ -2452,30 +3611,94 @@ export default function Nutrition() {
                     const current = Number(editForm.serving_amount) || 0;
                     let converted = current;
                     if (UNIT_TO_G[oldUnit] && UNIT_TO_G[newUnit]) {
-                      converted = Math.round(current * UNIT_TO_G[oldUnit] / UNIT_TO_G[newUnit] * 100) / 100;
+                      converted =
+                        Math.round(
+                          ((current * UNIT_TO_G[oldUnit]) /
+                            UNIT_TO_G[newUnit]) *
+                            100,
+                        ) / 100;
                     } else if (UNIT_TO_ML[oldUnit] && UNIT_TO_ML[newUnit]) {
-                      converted = Math.round(current * UNIT_TO_ML[oldUnit] / UNIT_TO_ML[newUnit] * 100) / 100;
+                      converted =
+                        Math.round(
+                          ((current * UNIT_TO_ML[oldUnit]) /
+                            UNIT_TO_ML[newUnit]) *
+                            100,
+                        ) / 100;
                     }
-                    setEditForm((f) => ({ ...f, serving_unit: newUnit, serving_amount: String(converted) }));
+                    setEditForm((f) => ({
+                      ...f,
+                      serving_unit: newUnit,
+                      serving_amount: String(converted),
+                    }));
                   }}
-                  style={{ padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, outline: "none", background: "#fafafa", cursor: "pointer" }}
+                  style={{
+                    padding: "8px 10px",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    outline: "none",
+                    background: "#fafafa",
+                    cursor: "pointer",
+                  }}
                 >
-                  {SERVING_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  {SERVING_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
                 </select>
               )}
             </div>
 
-            <div style={{ background: "#f7f7fb", borderRadius: 10, padding: "12px 14px", marginBottom: 20 }}>
+            <div
+              style={{
+                background: "#f7f7fb",
+                borderRadius: 10,
+                padding: "12px 14px",
+                marginBottom: 20,
+              }}
+            >
               <div style={{ display: "flex", gap: 16 }}>
                 {visibleMacroList.map((m) => {
                   const scaled = editingPlanItem
-                    ? Math.round((editingPlanItem[m.key] || 0) * planEditScale() * (m.key === "calories" ? 1 : 10)) / (m.key === "calories" ? 1 : 10)
+                    ? Math.round(
+                        (editingPlanItem[m.key] || 0) *
+                          planEditScale() *
+                          (m.key === "calories" ? 1 : 10),
+                      ) / (m.key === "calories" ? 1 : 10)
                     : 0;
                   return (
-                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 2, whiteSpace: "nowrap" }}>{m.label}</span>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{scaled}</span>
-                      <span style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</span>
+                    <div
+                      key={m.key}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "#bbb",
+                          fontWeight: 600,
+                          marginBottom: 2,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {m.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: m.color,
+                        }}
+                      >
+                        {scaled}
+                      </span>
+                      <span style={{ fontSize: 10, color: "#bbb" }}>
+                        {m.unit}
+                      </span>
                     </div>
                   );
                 })}
@@ -2485,13 +3708,32 @@ export default function Nutrition() {
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button
                 onClick={() => setEditingPlanItem(null)}
-                style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 8,
+                  background: "none",
+                  fontSize: 14,
+                  cursor: "pointer",
+                  color: "#555",
+                }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleEditPlanItemSave}
-                style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+                style={{
+                  flex: 2,
+                  padding: "10px 0",
+                  border: "none",
+                  borderRadius: 8,
+                  background: "#4f8ef7",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
               >
                 Save
               </button>
@@ -2502,7 +3744,7 @@ export default function Nutrition() {
 
       {/* Log Table */}
       <div
-      id="logTable"
+        id="logTable"
         style={{
           background: "#fff",
           borderRadius: 10,
@@ -2523,7 +3765,14 @@ export default function Nutrition() {
             Today's Log ({entries.length}{" "}
             {entries.length === 1 ? "item" : "items"})
             {dayPlanItems.length > 0 && (
-              <span style={{ fontSize: 13, fontWeight: 500, color: "#4f8ef7", marginLeft: 8 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "#4f8ef7",
+                  marginLeft: 8,
+                }}
+              >
                 · {dayPlanItems.length} planned
               </span>
             )}
@@ -2533,16 +3782,38 @@ export default function Nutrition() {
               {selectionMode ? (
                 <>
                   <button
-                    onClick={() => setSelectedEntryIds(
-                      selectedEntryIds.size === entries.length ? new Set() : new Set(entries.map(e => e.id))
-                    )}
-                    style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#555" }}
+                    onClick={() =>
+                      setSelectedEntryIds(
+                        selectedEntryIds.size === entries.length
+                          ? new Set()
+                          : new Set(entries.map((e) => e.id)),
+                      )
+                    }
+                    style={{
+                      background: "none",
+                      border: "1px solid #ddd",
+                      borderRadius: 6,
+                      padding: "5px 12px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "#555",
+                    }}
                   >
-                    {selectedEntryIds.size === entries.length ? "Deselect All" : "Select All"}
+                    {selectedEntryIds.size === entries.length
+                      ? "Deselect All"
+                      : "Select All"}
                   </button>
                   <button
                     onClick={exitSelectionMode}
-                    style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#888" }}
+                    style={{
+                      background: "none",
+                      border: "1px solid #ddd",
+                      borderRadius: 6,
+                      padding: "5px 12px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "#888",
+                    }}
                   >
                     Cancel
                   </button>
@@ -2550,7 +3821,15 @@ export default function Nutrition() {
               ) : (
                 <button
                   onClick={() => setSelectionMode(true)}
-                  style={{ background: "none", border: "1px solid #ddd", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, color: "#555" }}
+                  style={{
+                    background: "none",
+                    border: "1px solid #ddd",
+                    borderRadius: 6,
+                    padding: "5px 12px",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    color: "#555",
+                  }}
                 >
                   Select
                 </button>
@@ -2560,20 +3839,53 @@ export default function Nutrition() {
         </div>
 
         {selectionMode && selectedEntryIds.size > 0 && (
-          <div style={{ display: "flex", gap: 8, padding: "10px 20px", borderBottom: "1px solid #f0f0f0", background: "#fafafa" }}>
-            <span style={{ fontSize: 13, color: "#888", marginRight: "auto", alignSelf: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              padding: "10px 20px",
+              borderBottom: "1px solid #f0f0f0",
+              background: "#fafafa",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 13,
+                color: "#888",
+                marginRight: "auto",
+                alignSelf: "center",
+              }}
+            >
               {selectedEntryIds.size} selected
             </span>
             <button
               onClick={handleDeleteSelected}
-              style={{ background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#e05c5c" }}
+              style={{
+                background: "#fff0f0",
+                border: "1px solid #ffc8c8",
+                borderRadius: 7,
+                padding: "6px 14px",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#e05c5c",
+              }}
             >
               Delete
             </button>
             {selectedEntryIds.size >= 2 && (
               <button
                 onClick={() => setCombineModalOpen(true)}
-                style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#4f8ef7" }}
+                style={{
+                  background: "#eff6ff",
+                  border: "1px solid #93c5fd",
+                  borderRadius: 7,
+                  padding: "6px 14px",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#4f8ef7",
+                }}
               >
                 Combine
               </button>
@@ -2584,14 +3896,28 @@ export default function Nutrition() {
         {!entriesLoaded ? (
           <div style={{ padding: "16px 20px" }}>
             {[0, 1, 2].map((i) => (
-              <div key={i} className="skeleton-shimmer" style={{ height: 48, borderRadius: 8, marginBottom: 10 }} />
+              <div
+                key={i}
+                className="skeleton-shimmer"
+                style={{ height: 48, borderRadius: 8, marginBottom: 10 }}
+              />
             ))}
           </div>
         ) : entriesError ? (
-          <p style={{ textAlign: "center", color: "#e05c5c", padding: "32px 0", margin: 0, fontSize: 13 }}>
+          <p
+            style={{
+              textAlign: "center",
+              color: "#e05c5c",
+              padding: "32px 0",
+              margin: 0,
+              fontSize: 13,
+            }}
+          >
             Unable to fetch — check your connection and try again.
           </p>
-        ) : entries.length === 0 && plannedEntries.length === 0 && dayPlanItems.length === 0 ? (
+        ) : entries.length === 0 &&
+          plannedEntries.length === 0 &&
+          dayPlanItems.length === 0 ? (
           <p
             style={{
               textAlign: "center",
@@ -2603,146 +3929,541 @@ export default function Nutrition() {
             No foods logged yet — add your first entry above.
           </p>
         ) : isMobile ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {sortedEntries.map((entry) => {
-                const isExpanded = expandedLogIds.has(entry.id);
-                const isSelected = selectedEntryIds.has(entry.id);
-                return (
-                  <div key={entry.id}
-                    onClick={() => {
-                      if (selectionMode) { toggleEntrySelection(entry.id); return; }
-                      setExpandedLogIds(prev => {
-                        const next = new Set(prev);
-                        next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
-                        return next;
-                      });
-                    }}
-                    style={{ background: isSelected ? "#eff6ff" : "#fafafa", border: `1px solid ${isSelected ? "#93c5fd" : "#f0f0f0"}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", WebkitTapHighlightColor: "transparent", display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    {selectionMode && (
-                      <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`, background: isSelected ? "#4f8ef7" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                        {isSelected && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
-                      </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, minWidth: 0, marginRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name}</span>
-                        {entry.logged_time && <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>{entry.logged_time}</span>}
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 3 }}>
-                        <span style={{ fontSize: 12, color: "#aaa" }}>{entry.serving_amount ? fmtServing(entry.serving_amount, entry.serving_unit) : ""}</span>
-                        <span style={{ fontSize: 13, color: "#ff8c42", fontWeight: 700, flexShrink: 0 }}>{entry.calories} kcal</span>
-                      </div>
-                      {!selectionMode && isExpanded && (
-                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0f0f0" }}>
-                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 10 }}>
-                            {visibleMacroList.map((m) => (
-                              <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
-                                <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
-                                  {{ calories: "Calories", protein: "Protein", carbs: "Carbs", fat: "Fat", fiber: "Fiber", sugar: "Sugar" }[m.key]}
-                                </span>
-                                <span style={{ fontSize: 13, color: m.color, fontWeight: 600 }}>
-                                  {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }} onClick={e => e.stopPropagation()}>
-                            {!savedFoods.some(f => f.name.toLowerCase() === entry.food_name.toLowerCase()) && (
-                              <button
-                                onClick={() => handleSaveEntryToMyFoods(entry)}
-                                style={{ flex: 1, padding: "7px 0", background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 8, color: "#4f8ef7", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                              >☆ Save to Library</button>
-                            )}
-                            <button
-                              onClick={() => { if (window.confirm(`Remove "${entry.food_name}" from today's log?`)) handleDelete(entry.id); }}
-                              style={{ flex: 1, padding: "7px 0", background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 8, color: "#e05c5c", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                            >Delete</button>
-                          </div>
-                        </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {sortedEntries.map((entry) => {
+              const isExpanded = expandedLogIds.has(entry.id);
+              const isSelected = selectedEntryIds.has(entry.id);
+              return (
+                <div
+                  key={entry.id}
+                  onClick={() => {
+                    if (selectionMode) {
+                      toggleEntrySelection(entry.id);
+                      return;
+                    }
+                    setExpandedLogIds((prev) => {
+                      const next = new Set(prev);
+                      next.has(entry.id)
+                        ? next.delete(entry.id)
+                        : next.add(entry.id);
+                      return next;
+                    });
+                  }}
+                  style={{
+                    background: isSelected ? "#eff6ff" : "#fafafa",
+                    border: `1px solid ${isSelected ? "#93c5fd" : "#f0f0f0"}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                    display: "flex",
+                    gap: 10,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {selectionMode && (
+                    <div
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`,
+                        background: isSelected ? "#4f8ef7" : "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        marginTop: 2,
+                      }}
+                    >
+                      {isSelected && (
+                        <span
+                          style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}
+                        >
+                          ✓
+                        </span>
                       )}
                     </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          color: "#333",
+                          flex: 1,
+                          minWidth: 0,
+                          marginRight: 8,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {entry.food_name}
+                      </span>
+                      {entry.logged_time && (
+                        <span
+                          style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}
+                        >
+                          {entry.logged_time}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                        marginTop: 3,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: "#aaa" }}>
+                        {entry.serving_amount
+                          ? fmtServing(entry.serving_amount, entry.serving_unit)
+                          : ""}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#ff8c42",
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {entry.calories} kcal
+                      </span>
+                    </div>
+                    {!selectionMode && isExpanded && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          paddingTop: 10,
+                          borderTop: "1px solid #f0f0f0",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            alignItems: "flex-start",
+                            marginBottom: 10,
+                          }}
+                        >
+                          {visibleMacroList.map((m) => (
+                            <div
+                              key={m.key}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                minWidth: 44,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  color: "#bbb",
+                                  fontWeight: 500,
+                                  marginBottom: 1,
+                                }}
+                              >
+                                {
+                                  {
+                                    calories: "Calories",
+                                    protein: "Protein",
+                                    carbs: "Carbs",
+                                    fat: "Fat",
+                                    fiber: "Fiber",
+                                    sugar: "Sugar",
+                                  }[m.key]
+                                }
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  color: m.color,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {entry[m.key] > 0
+                                  ? m.key === "calories"
+                                    ? entry[m.key]
+                                    : entry[m.key].toFixed(1)
+                                  : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 8 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {!savedFoods.some(
+                            (f) =>
+                              f.name.toLowerCase() ===
+                              entry.food_name.toLowerCase(),
+                          ) && (
+                            <button
+                              onClick={() => handleSaveEntryToMyFoods(entry)}
+                              style={{
+                                flex: 1,
+                                padding: "7px 0",
+                                background: "#f0f7ff",
+                                border: "1px solid #c8e0ff",
+                                borderRadius: 8,
+                                color: "#4f8ef7",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ☆ Save to Library
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remove "${entry.food_name}" from today's log?`,
+                                )
+                              )
+                                handleDelete(entry.id);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "7px 0",
+                              background: "#fff0f0",
+                              border: "1px solid #ffc8c8",
+                              borderRadius: 8,
+                              color: "#e05c5c",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-              {planMode && plannedEntries.map((entry) => (
-                <div key={entry.id}
-                  style={{ background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: "#1d4ed8", flex: 1, marginRight: 8 }}>{entry.food_name}</span>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                </div>
+              );
+            })}
+            {planMode &&
+              plannedEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  style={{
+                    background: "#eff6ff",
+                    border: "1.5px solid #93c5fd",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 14,
+                        color: "#1d4ed8",
+                        flex: 1,
+                        marginRight: 8,
+                      }}
+                    >
+                      {entry.food_name}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
                       {entry.serving_amount ? (
-                        <span style={{ fontSize: 12, color: "#93c5fd", whiteSpace: "nowrap" }}>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "#93c5fd",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {fmtServing(entry.serving_amount, entry.serving_unit)}
                         </span>
                       ) : null}
-                      <button onClick={() => handleDelete(entry.id)}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#93c5fd", fontSize: 15, lineHeight: 1, padding: "2px 4px" }}
-                        title="Remove from plan">✕</button>
+                      <button
+                        onClick={() => handleDelete(entry.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#93c5fd",
+                          fontSize: 15,
+                          lineHeight: 1,
+                          padding: "2px 4px",
+                        }}
+                        title="Remove from plan"
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                     {visibleMacroList.map((m) => (
-                      <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
-                        <span style={{ fontSize: 10, color: "#93c5fd", fontWeight: 500, marginBottom: 1 }}>
-                          {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
+                      <div
+                        key={m.key}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          minWidth: 36,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#93c5fd",
+                            fontWeight: 500,
+                            marginBottom: 1,
+                          }}
+                        >
+                          {
+                            {
+                              calories: "Cal",
+                              protein: "Pro",
+                              carbs: "Carb",
+                              fat: "Fat",
+                              fiber: "Fib",
+                              sugar: "Sug",
+                            }[m.key]
+                          }
                         </span>
-                        <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 600 }}>
-                          {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : "—"}
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: "#4f8ef7",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {entry[m.key] > 0
+                            ? m.key === "calories"
+                              ? entry[m.key]
+                              : entry[m.key].toFixed(1)
+                            : "—"}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
-              {dayPlanItems.length > 0 && (
-                <div style={{ borderTop: "2px dashed #93c5fd", paddingTop: 8 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "#4f8ef7", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 8px 2px" }}>
-                    Planned — tap ✓ when complete
-                  </p>
-                  {dayPlanItems.map(item => (
-                    <div key={item.id} style={{ background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, padding: "10px 12px", marginBottom: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <span style={{ fontWeight: 600, fontSize: 14, color: "#1d4ed8", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>{item.food_name}</span>
-                        <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 700, flexShrink: 0 }}>{item.calories} kcal</span>
-                      </div>
-                      {item.serving_amount && (
-                        <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 2 }}>{fmtServing(item.serving_amount, item.serving_unit)}</div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        <button
-                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
-                          style={{ flex: 1, padding: "7px 0", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-                        >✓ Mark as Complete</button>
-                        <button
-                          onClick={() => editPlanItem(item.id)}
-                          style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}
-                        ><MdEdit size={16} /></button>
-                        <button
-                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
-                          style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
-                        >✕</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{ background: "#fff8f3", border: "1px solid #ffe8d0", borderRadius: 10, padding: "12px 14px" }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "#555", margin: "0 0 8px" }}>Total</p>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  {visibleMacroList.map((m) => (
-                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 36 }}>
-                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 500, marginBottom: 1 }}>
-                        {{ calories: "Cal", protein: "Pro", carbs: "Carb", fat: "Fat", fiber: "Fib", sugar: "Sug" }[m.key]}
+            {dayPlanItems.length > 0 && (
+              <div style={{ borderTop: "2px dashed #93c5fd", paddingTop: 8 }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#4f8ef7",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    margin: "0 0 8px 2px",
+                  }}
+                >
+                  Planned — tap ✓ when complete
+                </p>
+                {dayPlanItems.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: "#eff6ff",
+                      border: "1.5px solid #93c5fd",
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          color: "#1d4ed8",
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          marginRight: 8,
+                        }}
+                      >
+                        {item.food_name}
                       </span>
-                      <span style={{ fontSize: 13, color: m.color, fontWeight: 700 }}>
-                        {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "#4f8ef7",
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.calories} kcal
                       </span>
                     </div>
-                  ))}
-                </div>
+                    {item.serving_amount && (
+                      <div
+                        style={{ fontSize: 12, color: "#93c5fd", marginTop: 2 }}
+                      >
+                        {fmtServing(item.serving_amount, item.serving_unit)}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Mark "${item.food_name}" as complete?`,
+                            )
+                          )
+                            markPlanItemComplete(item);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "7px 0",
+                          background: "#4f8ef7",
+                          border: "none",
+                          borderRadius: 8,
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✓ Mark as Complete
+                      </button>
+                      <button
+                        onClick={() => editPlanItem(item.id)}
+                        style={{
+                          padding: "7px 10px",
+                          background: "none",
+                          border: "1px solid #93c5fd",
+                          borderRadius: 8,
+                          color: "#93c5fd",
+                          fontSize: 13,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <MdEdit size={16} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Remove "${item.food_name}" from today's plan?`,
+                            )
+                          )
+                            removePlanItem(item.id);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          background: "none",
+                          border: "1px solid #93c5fd",
+                          borderRadius: 8,
+                          color: "#93c5fd",
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div
+              style={{
+                background: "#fff8f3",
+                border: "1px solid #ffe8d0",
+                borderRadius: 10,
+                padding: "12px 14px",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#555",
+                  margin: "0 0 8px",
+                }}
+              >
+                Total
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {visibleMacroList.map((m) => (
+                  <div
+                    key={m.key}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      minWidth: 36,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "#bbb",
+                        fontWeight: 500,
+                        marginBottom: 1,
+                      }}
+                    >
+                      {
+                        {
+                          calories: "Cal",
+                          protein: "Pro",
+                          carbs: "Carb",
+                          fat: "Fat",
+                          fiber: "Fib",
+                          sugar: "Sug",
+                        }[m.key]
+                      }
+                    </span>
+                    <span
+                      style={{ fontSize: 13, color: m.color, fontWeight: 700 }}
+                    >
+                      {m.key === "calories"
+                        ? totals[m.key].toFixed(0)
+                        : totals[m.key].toFixed(1)}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : (
+          </div>
+        ) : (
           <div style={{ overflowX: "auto" }}>
             <table
               style={{
@@ -2760,7 +4481,11 @@ export default function Nutrition() {
                     <th key={m.key} style={thStyle()}>
                       {m.label}
                       <br />
-                      <span style={{ fontWeight: 400, color: "#aaa", fontSize: 11 }}>{m.unit}</span>
+                      <span
+                        style={{ fontWeight: 400, color: "#aaa", fontSize: 11 }}
+                      >
+                        {m.unit}
+                      </span>
                     </th>
                   ))}
                   <th style={thStyle({ color: "#aaa" })}>Time</th>
@@ -2771,119 +4496,438 @@ export default function Nutrition() {
                 {sortedEntries.map((entry, i) => {
                   const isSelected = selectedEntryIds.has(entry.id);
                   return (
-                  <tr
-                    key={entry.id}
-                    onClick={selectionMode ? () => toggleEntrySelection(entry.id) : undefined}
-                    style={{ borderTop: "1px solid #f0f0f0", background: isSelected ? "#eff6ff" : i % 2 === 0 ? "#fff" : "#fafafa", cursor: selectionMode ? "pointer" : "default" }}
-                  >
-                    {selectionMode && (
-                      <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                        <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`, background: isSelected ? "#4f8ef7" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-                          {isSelected && <span style={{ color: "#fff", fontSize: 11, lineHeight: 1 }}>✓</span>}
+                    <tr
+                      key={entry.id}
+                      onClick={
+                        selectionMode
+                          ? () => toggleEntrySelection(entry.id)
+                          : undefined
+                      }
+                      style={{
+                        borderTop: "1px solid #f0f0f0",
+                        background: isSelected
+                          ? "#eff6ff"
+                          : i % 2 === 0
+                            ? "#fff"
+                            : "#fafafa",
+                        cursor: selectionMode ? "pointer" : "default",
+                      }}
+                    >
+                      {selectionMode && (
+                        <td
+                          style={{ padding: "10px 12px", textAlign: "center" }}
+                        >
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: "50%",
+                              border: `2px solid ${isSelected ? "#4f8ef7" : "#ccc"}`,
+                              background: isSelected ? "#4f8ef7" : "#fff",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              margin: "0 auto",
+                            }}
+                          >
+                            {isSelected && (
+                              <span
+                                style={{
+                                  color: "#fff",
+                                  fontSize: 11,
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ✓
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      <td style={{ padding: "10px 16px", fontWeight: 500 }}>
+                        {entry.food_name}
+                      </td>
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "center",
+                          color: "#aaa",
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {fmtServing(entry.serving_amount, entry.serving_unit)}
+                      </td>
+                      {visibleMacroList.map((m) => (
+                        <td
+                          key={m.key}
+                          style={{
+                            padding: "10px 16px",
+                            textAlign: "center",
+                            color: m.color,
+                            fontWeight: m.key === "calories" ? 700 : 600,
+                          }}
+                        >
+                          {entry[m.key] > 0 ? (
+                            m.key === "calories" ? (
+                              entry[m.key]
+                            ) : (
+                              entry[m.key].toFixed(1)
+                            )
+                          ) : (
+                            <span style={{ color: "#ddd" }}>—</span>
+                          )}
+                        </td>
+                      ))}
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "center",
+                          color: "#aaa",
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {entry.logged_time || "—"}
+                      </td>
+                      <td
+                        style={{
+                          padding: "6px 12px",
+                          textAlign: "center",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {!savedFoods.some(
+                            (f) =>
+                              f.name.toLowerCase() ===
+                              entry.food_name.toLowerCase(),
+                          ) ? (
+                            <button
+                              onClick={() => handleSaveEntryToMyFoods(entry)}
+                              style={{
+                                background: "#f0f7ff",
+                                border: "1px solid #c8e0ff",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                                color: "#4f8ef7",
+                                fontSize: 14,
+                                lineHeight: 1,
+                                padding: "5px 8px",
+                                minWidth: 32,
+                              }}
+                              title="Save to My Food Library"
+                            >
+                              ☆
+                            </button>
+                          ) : (
+                            <div style={{ minWidth: 32, height: 26 }} />
+                          )}
+                          <button
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remove "${entry.food_name}" from today's log?`,
+                                )
+                              )
+                                handleDelete(entry.id);
+                            }}
+                            style={{
+                              background: "#fff0f0",
+                              border: "1px solid #ffc8c8",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              color: "#e05c5c",
+                              fontSize: 14,
+                              lineHeight: 1,
+                              padding: "5px 8px",
+                              minWidth: 32,
+                            }}
+                            title="Remove"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </td>
-                    )}
-                    <td style={{ padding: "10px 16px", fontWeight: 500 }}>{entry.food_name}</td>
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>
-                      {fmtServing(entry.serving_amount, entry.serving_unit)}
-                    </td>
-                    {visibleMacroList.map((m) => (
-                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: m.color, fontWeight: m.key === "calories" ? 700 : 600 }}>
-                        {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
-                      </td>
-                    ))}
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#aaa", fontSize: 12, whiteSpace: "nowrap" }}>{entry.logged_time || "—"}</td>
-                    <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {!savedFoods.some((f) => f.name.toLowerCase() === entry.food_name.toLowerCase()) ? (
-                          <button
-                            onClick={() => handleSaveEntryToMyFoods(entry)}
-                            style={{ background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
-                            title="Save to My Food Library"
-                          >☆</button>
-                        ) : (
-                          <div style={{ minWidth: 32, height: 26 }} />
-                        )}
-                        <button
-                          onClick={() => { if (window.confirm(`Remove "${entry.food_name}" from today's log?`)) handleDelete(entry.id); }}
-                          style={{ background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 6, cursor: "pointer", color: "#e05c5c", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
-                          title="Remove"
-                        >✕</button>
-                      </div>
-                    </td>
-                  </tr>
+                    </tr>
                   );
                 })}
-                {planMode && plannedEntries.map((entry) => (
-                  <tr key={entry.id} style={{ borderTop: "1px solid #dbeafe", background: "#eff6ff" }}>
-                    <td style={{ padding: "10px 16px", fontWeight: 500, color: "#1d4ed8" }}>{entry.food_name}</td>
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>
-                      {fmtServing(entry.serving_amount, entry.serving_unit)}
-                    </td>
-                    {visibleMacroList.map((m) => (
-                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: "#4f8ef7", fontWeight: m.key === "calories" ? 700 : 600 }}>
-                        {entry[m.key] > 0 ? (m.key === "calories" ? entry[m.key] : entry[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
+                {planMode &&
+                  plannedEntries.map((entry) => (
+                    <tr
+                      key={entry.id}
+                      style={{
+                        borderTop: "1px solid #dbeafe",
+                        background: "#eff6ff",
+                      }}
+                    >
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          fontWeight: 500,
+                          color: "#1d4ed8",
+                        }}
+                      >
+                        {entry.food_name}
                       </td>
-                    ))}
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>{entry.logged_time || "—"}</td>
-                    <td style={{ padding: "6px 12px", textAlign: "center" }}>
-                      <button
-                        onClick={() => handleDelete(entry.id)}
-                        style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", minWidth: 32 }}
-                        title="Remove from plan"
-                      >✕</button>
-                    </td>
-                  </tr>
-                ))}
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "center",
+                          color: "#93c5fd",
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {fmtServing(entry.serving_amount, entry.serving_unit)}
+                      </td>
+                      {visibleMacroList.map((m) => (
+                        <td
+                          key={m.key}
+                          style={{
+                            padding: "10px 16px",
+                            textAlign: "center",
+                            color: "#4f8ef7",
+                            fontWeight: m.key === "calories" ? 700 : 600,
+                          }}
+                        >
+                          {entry[m.key] > 0 ? (
+                            m.key === "calories" ? (
+                              entry[m.key]
+                            ) : (
+                              entry[m.key].toFixed(1)
+                            )
+                          ) : (
+                            <span style={{ color: "#ddd" }}>—</span>
+                          )}
+                        </td>
+                      ))}
+                      <td
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "center",
+                          color: "#93c5fd",
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {entry.logged_time || "—"}
+                      </td>
+                      <td style={{ padding: "6px 12px", textAlign: "center" }}>
+                        <button
+                          onClick={() => handleDelete(entry.id)}
+                          style={{
+                            background: "#dbeafe",
+                            border: "1px solid #93c5fd",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            color: "#4f8ef7",
+                            fontSize: 14,
+                            lineHeight: 1,
+                            padding: "5px 8px",
+                            minWidth: 32,
+                          }}
+                          title="Remove from plan"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
                 {dayPlanItems.length > 0 && (
                   <tr style={{ background: "#dbeafe" }}>
-                    <td colSpan={3 + visibleMacroList.length} style={{ padding: "6px 16px", fontSize: 11, fontWeight: 700, color: "#4f8ef7", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <td
+                      colSpan={3 + visibleMacroList.length}
+                      style={{
+                        padding: "6px 16px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#4f8ef7",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
                       Planned — click ✓ when complete
                     </td>
                     <td />
                   </tr>
                 )}
-                {dayPlanItems.map(item => (
-                  <tr key={item.id} style={{ borderTop: "1px solid #dbeafe", background: "#f0f7ff" }}>
-                    <td style={{ padding: "10px 16px", fontWeight: 500, color: "#1d4ed8" }}>{item.food_name}</td>
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>
+                {dayPlanItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderTop: "1px solid #dbeafe",
+                      background: "#f0f7ff",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        fontWeight: 500,
+                        color: "#1d4ed8",
+                      }}
+                    >
+                      {item.food_name}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        textAlign: "center",
+                        color: "#93c5fd",
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {fmtServing(item.serving_amount, item.serving_unit)}
                     </td>
                     {visibleMacroList.map((m) => (
-                      <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", color: "#4f8ef7", fontWeight: m.key === "calories" ? 700 : 600 }}>
-                        {item[m.key] > 0 ? (m.key === "calories" ? item[m.key] : item[m.key].toFixed(1)) : <span style={{ color: "#ddd" }}>—</span>}
+                      <td
+                        key={m.key}
+                        style={{
+                          padding: "10px 16px",
+                          textAlign: "center",
+                          color: "#4f8ef7",
+                          fontWeight: m.key === "calories" ? 700 : 600,
+                        }}
+                      >
+                        {item[m.key] > 0 ? (
+                          m.key === "calories" ? (
+                            item[m.key]
+                          ) : (
+                            item[m.key].toFixed(1)
+                          )
+                        ) : (
+                          <span style={{ color: "#ddd" }}>—</span>
+                        )}
                       </td>
                     ))}
-                    <td style={{ padding: "10px 16px", textAlign: "center", color: "#93c5fd", fontSize: 12, whiteSpace: "nowrap" }}>{item.logged_time || "—"}</td>
-                    <td style={{ padding: "6px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <td
+                      style={{
+                        padding: "10px 16px",
+                        textAlign: "center",
+                        color: "#93c5fd",
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.logged_time || "—"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "6px 12px",
+                        textAlign: "center",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "center",
+                        }}
+                      >
                         <button
-                          onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
-                          style={{ background: "#4f8ef7", border: "none", borderRadius: 6, cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 700, padding: "5px 10px" }}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Mark "${item.food_name}" as complete?`,
+                              )
+                            )
+                              markPlanItemComplete(item);
+                          }}
+                          style={{
+                            background: "#4f8ef7",
+                            border: "none",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            color: "#fff",
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "5px 10px",
+                          }}
                           title="Mark as Complete"
-                        >✓</button>
+                        >
+                          ✓
+                        </button>
                         <button
                           onClick={() => editPlanItem(item.id)}
-                          style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px", display: "flex", alignItems: "center" }}
+                          style={{
+                            background: "#dbeafe",
+                            border: "1px solid #93c5fd",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            color: "#4f8ef7",
+                            fontSize: 14,
+                            lineHeight: 1,
+                            padding: "5px 8px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
                           title="Edit serving size"
-                        ><MdEdit size={16} /></button>
+                        >
+                          <MdEdit size={16} />
+                        </button>
                         <button
-                          onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
-                          style={{ background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 6, cursor: "pointer", color: "#4f8ef7", fontSize: 14, lineHeight: 1, padding: "5px 8px" }}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remove "${item.food_name}" from today's plan?`,
+                              )
+                            )
+                              removePlanItem(item.id);
+                          }}
+                          style={{
+                            background: "#dbeafe",
+                            border: "1px solid #93c5fd",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            color: "#4f8ef7",
+                            fontSize: 14,
+                            lineHeight: 1,
+                            padding: "5px 8px",
+                          }}
                           title="Remove from plan"
-                        >✕</button>
+                        >
+                          ✕
+                        </button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}>
-                  <td style={{ padding: "10px 16px", fontWeight: 700, color: "#555" }}>Total</td>
+                <tr
+                  style={{ borderTop: "2px solid #eee", background: "#fff8f3" }}
+                >
+                  <td
+                    style={{
+                      padding: "10px 16px",
+                      fontWeight: 700,
+                      color: "#555",
+                    }}
+                  >
+                    Total
+                  </td>
                   <td />
                   {visibleMacroList.map((m) => (
-                    <td key={m.key} style={{ padding: "10px 16px", textAlign: "center", fontWeight: 700, color: m.color }}>
-                      {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
+                    <td
+                      key={m.key}
+                      style={{
+                        padding: "10px 16px",
+                        textAlign: "center",
+                        fontWeight: 700,
+                        color: m.color,
+                      }}
+                    >
+                      {m.key === "calories"
+                        ? totals[m.key].toFixed(0)
+                        : totals[m.key].toFixed(1)}
                     </td>
                   ))}
                   <td />
@@ -2892,184 +4936,579 @@ export default function Nutrition() {
               </tfoot>
             </table>
           </div>
-          )}
+        )}
       </div>
 
-      {planExitOpen && (() => {
-        const logAll = async () => {
-          showToast("Logging…", "#888");
-          if (user) {
-            const { data: { user: u } } = await supabase.auth.getUser();
-            const toInsert = plannedEntries.map((e) => ({
-              user_id: u.id, logged_at: e.logged_at, logged_time: e.logged_time,
-              food_name: e.food_name, calories: e.calories, protein: e.protein,
-              fat: e.fat, carbs: e.carbs, fiber: e.fiber, sugar: e.sugar,
-              serving_amount: e.serving_amount, serving_unit: e.serving_unit,
-            }));
-            const { data } = await supabase.from("nutrition_logs").insert(toInsert).select();
-            if (data) {
-              const next = [...entries, ...data];
+      {planExitOpen &&
+        (() => {
+          const logAll = async () => {
+            showToast("Logging…", "#888");
+            if (user) {
+              const {
+                data: { user: u },
+              } = await supabase.auth.getUser();
+              const toInsert = plannedEntries.map((e) => ({
+                user_id: u.id,
+                logged_at: e.logged_at,
+                logged_time: e.logged_time,
+                food_name: e.food_name,
+                calories: e.calories,
+                protein: e.protein,
+                fat: e.fat,
+                carbs: e.carbs,
+                fiber: e.fiber,
+                sugar: e.sugar,
+                serving_amount: e.serving_amount,
+                serving_unit: e.serving_unit,
+              }));
+              const { data } = await supabase
+                .from("nutrition_logs")
+                .insert(toInsert)
+                .select();
+              if (data) {
+                const next = [...entries, ...data];
+                setEntries(next);
+                upsertDailyStatus(todayStr(), next, goals, u.id);
+              }
+            } else {
+              const next = [
+                ...entries,
+                ...plannedEntries.map((e) => ({
+                  ...e,
+                  id: "guest_" + Date.now() + Math.random(),
+                })),
+              ];
               setEntries(next);
-              upsertDailyStatus(todayStr(), next, goals, u.id);
+              saveGuestEntries(next);
             }
-          } else {
-            const next = [...entries, ...plannedEntries.map((e) => ({ ...e, id: "guest_" + Date.now() + Math.random() }))];
-            setEntries(next);
-            saveGuestEntries(next);
-          }
-          setPlannedEntries([]);
-          setPlanMode(false);
-          setPlanExitOpen(false);
-          showToast("Plan logged!", "#4f8ef7");
-        };
-        const discard = () => { setPlannedEntries([]); setPlanMode(false); setPlanExitOpen(false); };
-        const setPlan = async () => {
-          showToast("Saving plan…", "#888");
-          setPlannedEntries([]);
-          setPlanMode(false);
-          setPlanExitOpen(false);
-          if (user) {
-            const toInsert = plannedEntries.map(e => ({
-              user_id: user.id, logged_at: todayStr(), logged_time: e.logged_time,
-              food_name: e.food_name, calories: e.calories, protein: e.protein,
-              fat: e.fat, carbs: e.carbs, fiber: e.fiber, sugar: e.sugar,
-              serving_amount: e.serving_amount, serving_unit: e.serving_unit,
-              is_planned: true,
-            }));
-            const { data } = await supabase.from("nutrition_logs").insert(toInsert).select();
-            if (data) setDayPlanItems(prev => [...prev, ...data]);
-          } else {
-            const items = plannedEntries.map(e => ({ ...e, id: "guest_plan_" + Date.now() + Math.random() }));
-            const merged = [...dayPlanItems, ...items];
-            setDayPlanItems(merged);
-            saveGuestPlan(merged);
-          }
-          showToast("Plan set for today!", "#4f8ef7");
-        };
-        const n = plannedEntries.length;
-        const logLabel = `Log ${n} ${n === 1 ? "item" : "items"}`;
+            setPlannedEntries([]);
+            setPlanMode(false);
+            setPlanExitOpen(false);
+            showToast("Plan logged!", "#4f8ef7");
+          };
+          const discard = () => {
+            setPlannedEntries([]);
+            setPlanMode(false);
+            setPlanExitOpen(false);
+          };
+          const setPlan = async () => {
+            showToast("Saving plan…", "#888");
+            setPlannedEntries([]);
+            setPlanMode(false);
+            setPlanExitOpen(false);
+            if (user) {
+              const toInsert = plannedEntries.map((e) => ({
+                user_id: user.id,
+                logged_at: todayStr(),
+                logged_time: e.logged_time,
+                food_name: e.food_name,
+                calories: e.calories,
+                protein: e.protein,
+                fat: e.fat,
+                carbs: e.carbs,
+                fiber: e.fiber,
+                sugar: e.sugar,
+                serving_amount: e.serving_amount,
+                serving_unit: e.serving_unit,
+                is_planned: true,
+              }));
+              const { data } = await supabase
+                .from("nutrition_logs")
+                .insert(toInsert)
+                .select();
+              if (data) setDayPlanItems((prev) => [...prev, ...data]);
+            } else {
+              const items = plannedEntries.map((e) => ({
+                ...e,
+                id: "guest_plan_" + Date.now() + Math.random(),
+              }));
+              const merged = [...dayPlanItems, ...items];
+              setDayPlanItems(merged);
+              saveGuestPlan(merged);
+            }
+            showToast("Plan set for today!", "#4f8ef7");
+          };
+          const n = plannedEntries.length;
+          const logLabel = `Log ${n} ${n === 1 ? "item" : "items"}`;
 
-        if (isMobile) {
-          return (
-            <div onClick={() => setPlanExitOpen(false)}
-              style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}>
-              <div onClick={(e) => e.stopPropagation()}
-                style={{ width: "100%", background: "#fff", borderRadius: "18px 18px 0 0", padding: "24px 20px calc(24px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
-                <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 20px" }} />
-                <p style={{ margin: "0 0 4px", fontWeight: 700, fontSize: 16, color: "#333" }}>Exit Plan Mode</p>
-                <p style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}>
-                  You have {n} planned {n === 1 ? "item" : "items"}. Log them or discard?
-                </p>
-                <button onClick={logAll}
-                  style={{ width: "100%", padding: "13px 0", background: "#4f8ef7", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>
-                  {logLabel}
-                </button>
-                <button onClick={setPlan}
-                  style={{ width: "100%", padding: "13px 0", background: "#eff6ff", border: "1.5px solid #93c5fd", borderRadius: 10, color: "#4f8ef7", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>
-                  Set as Today's Plan
-                </button>
-                <button onClick={discard}
-                  style={{ width: "100%", padding: "13px 0", background: "#f7f7fb", border: "none", borderRadius: 10, color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-                  Discard
-                </button>
-              </div>
-            </div>
-          );
-        }
-
-        const plannedTotals = MACROS.reduce((acc, m) => {
-          acc[m.key] = plannedEntries.reduce((s, e) => s + (e[m.key] || 0), 0);
-          return acc;
-        }, {});
-
-        return (
-          <div onClick={() => setPlanExitOpen(false)}
-            style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div onClick={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, boxShadow: "0 8px 40px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-              {/* Header */}
-              <div style={{ display: "flex", alignItems: "center", padding: "18px 22px 14px", borderBottom: "1px solid #f0f0f0" }}>
-                <span style={{ fontWeight: 700, fontSize: 16, color: "#333", flex: 1 }}>Log Plan?</span>
-                <button onClick={() => setPlanExitOpen(false)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}>✕</button>
-              </div>
-              {/* Planned items list */}
-              <div style={{ maxHeight: 220, overflowY: "auto", overscrollBehavior: "contain", padding: "0 22px" }}>
-                {/* Column headers */}
-                <div style={{ display: "flex", alignItems: "center", padding: "8px 0 4px", borderBottom: "1px solid #f0f0f0" }}>
-                  <span style={{ flex: 1, marginRight: 12 }} />
-                  <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginRight: 14, minWidth: 60 }}>Serving</span>
-                  <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
-                    {visibleMacroList.map((m) => (
-                      <span key={m.key} style={{ fontSize: 10, color: "#bbb", fontWeight: 600, minWidth: 34, textAlign: "center" }}>{m.label}</span>
-                    ))}
-                  </div>
+          if (isMobile) {
+            return (
+              <div
+                onClick={() => setPlanExitOpen(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 600,
+                  background: "rgba(0,0,0,0.45)",
+                  display: "flex",
+                  alignItems: "flex-end",
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: "100%",
+                    background: "#fff",
+                    borderRadius: "18px 18px 0 0",
+                    padding:
+                      "24px 20px calc(24px + env(safe-area-inset-bottom, 0px))",
+                    boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 4,
+                      borderRadius: 99,
+                      background: "#e0e0e0",
+                      margin: "0 auto 20px",
+                    }}
+                  />
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "#333",
+                    }}
+                  >
+                    Exit Plan Mode
+                  </p>
+                  <p
+                    style={{ margin: "0 0 20px", fontSize: 13, color: "#888" }}
+                  >
+                    You have {n} planned {n === 1 ? "item" : "items"}. Log them
+                    or discard?
+                  </p>
+                  <button
+                    onClick={logAll}
+                    style={{
+                      width: "100%",
+                      padding: "13px 0",
+                      background: "#4f8ef7",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 10,
+                      fontWeight: 700,
+                      fontSize: 15,
+                      cursor: "pointer",
+                      marginBottom: 10,
+                    }}
+                  >
+                    {logLabel}
+                  </button>
+                  <button
+                    onClick={setPlan}
+                    style={{
+                      width: "100%",
+                      padding: "13px 0",
+                      background: "#eff6ff",
+                      border: "1.5px solid #93c5fd",
+                      borderRadius: 10,
+                      color: "#4f8ef7",
+                      fontWeight: 700,
+                      fontSize: 15,
+                      cursor: "pointer",
+                      marginBottom: 10,
+                    }}
+                  >
+                    Set as Today's Plan
+                  </button>
+                  <button
+                    onClick={discard}
+                    style={{
+                      width: "100%",
+                      padding: "13px 0",
+                      background: "#f7f7fb",
+                      border: "none",
+                      borderRadius: 10,
+                      color: "#888",
+                      fontWeight: 600,
+                      fontSize: 14,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Discard
+                  </button>
                 </div>
-                {plannedEntries.map((e) => (
-                  <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f7f7f7" }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: "#333", flex: 1, marginRight: 12 }}>{e.food_name}</span>
-                    <span style={{ fontSize: 12, color: "#93c5fd", marginRight: 14, whiteSpace: "nowrap", minWidth: 60 }}>
-                      {fmtServing(e.serving_amount, e.serving_unit)}
+              </div>
+            );
+          }
+
+          const plannedTotals = MACROS.reduce((acc, m) => {
+            acc[m.key] = plannedEntries.reduce(
+              (s, e) => s + (e[m.key] || 0),
+              0,
+            );
+            return acc;
+          }, {});
+
+          return (
+            <div
+              onClick={() => setPlanExitOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 600,
+                background: "rgba(0,0,0,0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: "#fff",
+                  borderRadius: 16,
+                  width: "100%",
+                  maxWidth: 560,
+                  boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "18px 22px 14px",
+                    borderBottom: "1px solid #f0f0f0",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 16,
+                      color: "#333",
+                      flex: 1,
+                    }}
+                  >
+                    Log Plan?
+                  </span>
+                  <button
+                    onClick={() => setPlanExitOpen(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#bbb",
+                      fontSize: 18,
+                      lineHeight: 1,
+                      padding: "2px 4px",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                {/* Planned items list */}
+                <div
+                  style={{
+                    maxHeight: 220,
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                    padding: "0 22px",
+                  }}
+                >
+                  {/* Column headers */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "8px 0 4px",
+                      borderBottom: "1px solid #f0f0f0",
+                    }}
+                  >
+                    <span style={{ flex: 1, marginRight: 12 }} />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "#bbb",
+                        fontWeight: 600,
+                        marginRight: 14,
+                        minWidth: 60,
+                      }}
+                    >
+                      Serving
                     </span>
                     <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
                       {visibleMacroList.map((m) => (
-                        <span key={m.key} style={{ fontSize: 12, color: m.color, fontWeight: 600, minWidth: 34, textAlign: "center" }}>
-                          {m.key === "calories" ? e[m.key] : e[m.key]?.toFixed(1)}
+                        <span
+                          key={m.key}
+                          style={{
+                            fontSize: 10,
+                            color: "#bbb",
+                            fontWeight: 600,
+                            minWidth: 34,
+                            textAlign: "center",
+                          }}
+                        >
+                          {m.label}
                         </span>
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-              {/* Macro additions summary */}
-              <div style={{ background: "#eff6ff", margin: "14px 22px 8px", borderRadius: 8, padding: "10px 14px" }}>
-                <span style={{ fontSize: 11, color: "#4f8ef7", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Adding</span>
-                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
-                  {visibleMacroList.map((m) => (
-                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
-                      <span style={{ fontSize: 10, color: "#93c5fd", fontWeight: 600, marginBottom: 1 }}>{m.label}</span>
-                      <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        +{m.key === "calories" ? plannedTotals[m.key].toFixed(0) : plannedTotals[m.key].toFixed(1)}
-                        <span style={{ fontWeight: 400, fontSize: 10, color: "#93c5fd" }}> {m.unit}</span>
+                  {plannedEntries.map((e) => (
+                    <div
+                      key={e.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "7px 0",
+                        borderBottom: "1px solid #f7f7f7",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          color: "#333",
+                          flex: 1,
+                          marginRight: 12,
+                        }}
+                      >
+                        {e.food_name}
                       </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "#93c5fd",
+                          marginRight: 14,
+                          whiteSpace: "nowrap",
+                          minWidth: 60,
+                        }}
+                      >
+                        {fmtServing(e.serving_amount, e.serving_unit)}
+                      </span>
+                      <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                        {visibleMacroList.map((m) => (
+                          <span
+                            key={m.key}
+                            style={{
+                              fontSize: 12,
+                              color: m.color,
+                              fontWeight: 600,
+                              minWidth: 34,
+                              textAlign: "center",
+                            }}
+                          >
+                            {m.key === "calories"
+                              ? e[m.key]
+                              : e[m.key]?.toFixed(1)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-              {/* Projected day totals */}
-              <div style={{ background: "#f7f7fb", margin: "0 22px 14px", borderRadius: 8, padding: "10px 14px" }}>
-                <span style={{ fontSize: 11, color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Updated Daily Progress</span>
-                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
-                  {visibleMacroList.map((m) => (
-                    <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
-                      <span style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 1 }}>{m.label}</span>
-                      <span style={{ fontSize: 13, color: "#555", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        {m.key === "calories" ? totals[m.key].toFixed(0) : totals[m.key].toFixed(1)}
-                        <span style={{ fontWeight: 400, fontSize: 10, color: "#bbb" }}> {m.unit}</span>
-                      </span>
-                    </div>
-                  ))}
+                {/* Macro additions summary */}
+                <div
+                  style={{
+                    background: "#eff6ff",
+                    margin: "14px 22px 8px",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#4f8ef7",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Adding
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      flexWrap: "wrap",
+                      marginTop: 6,
+                    }}
+                  >
+                    {visibleMacroList.map((m) => (
+                      <div
+                        key={m.key}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          minWidth: 40,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#93c5fd",
+                            fontWeight: 600,
+                            marginBottom: 1,
+                          }}
+                        >
+                          {m.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: "#4f8ef7",
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          +
+                          {m.key === "calories"
+                            ? plannedTotals[m.key].toFixed(0)
+                            : plannedTotals[m.key].toFixed(1)}
+                          <span
+                            style={{
+                              fontWeight: 400,
+                              fontSize: 10,
+                              color: "#93c5fd",
+                            }}
+                          >
+                            {" "}
+                            {m.unit}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              {/* Buttons */}
-              <div style={{ display: "flex", gap: 10, padding: "0 22px 20px" }}>
-                <button onClick={discard}
-                  style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555", fontWeight: 600 }}>
-                  Discard
-                </button>
-                <button onClick={setPlan}
-                  style={{ flex: 2, padding: "10px 0", border: "1.5px solid #93c5fd", borderRadius: 8, background: "#eff6ff", color: "#4f8ef7", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  Set as Today's Plan
-                </button>
-                <button onClick={logAll}
-                  style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#4f8ef7", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  {logLabel}
-                </button>
+                {/* Projected day totals */}
+                <div
+                  style={{
+                    background: "#f7f7fb",
+                    margin: "0 22px 14px",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#888",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Updated Daily Progress
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      flexWrap: "wrap",
+                      marginTop: 6,
+                    }}
+                  >
+                    {visibleMacroList.map((m) => (
+                      <div
+                        key={m.key}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          minWidth: 40,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#bbb",
+                            fontWeight: 600,
+                            marginBottom: 1,
+                          }}
+                        >
+                          {m.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            color: "#555",
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {m.key === "calories"
+                            ? totals[m.key].toFixed(0)
+                            : totals[m.key].toFixed(1)}
+                          <span
+                            style={{
+                              fontWeight: 400,
+                              fontSize: 10,
+                              color: "#bbb",
+                            }}
+                          >
+                            {" "}
+                            {m.unit}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Buttons */}
+                <div
+                  style={{ display: "flex", gap: 10, padding: "0 22px 20px" }}
+                >
+                  <button
+                    onClick={discard}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      border: "1px solid #e0e0e0",
+                      borderRadius: 8,
+                      background: "none",
+                      fontSize: 14,
+                      cursor: "pointer",
+                      color: "#555",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    onClick={setPlan}
+                    style={{
+                      flex: 2,
+                      padding: "10px 0",
+                      border: "1.5px solid #93c5fd",
+                      borderRadius: 8,
+                      background: "#eff6ff",
+                      color: "#4f8ef7",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Set as Today's Plan
+                  </button>
+                  <button
+                    onClick={logAll}
+                    style={{
+                      flex: 2,
+                      padding: "10px 0",
+                      border: "none",
+                      borderRadius: 8,
+                      background: "#4f8ef7",
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {logLabel}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {scannerOpen && (
         <BarcodeScanner
@@ -3081,35 +5520,116 @@ export default function Nutrition() {
       {logEntryMenu && (
         <div
           onClick={() => setLogEntryMenu(null)}
-          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 500,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "flex-end",
+          }}
         >
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ width: "100%", background: "#fff", borderRadius: "18px 18px 0 0", padding: "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: "#e0e0e0", margin: "0 auto 18px" }} />
-            <p style={{ fontWeight: 700, fontSize: 15, color: "#333", margin: "0 0 4px" }}>{logEntryMenu.food_name}</p>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              background: "#fff",
+              borderRadius: "18px 18px 0 0",
+              padding:
+                "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))",
+              boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
+            }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 99,
+                background: "#e0e0e0",
+                margin: "0 auto 18px",
+              }}
+            />
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: 15,
+                color: "#333",
+                margin: "0 0 4px",
+              }}
+            >
+              {logEntryMenu.food_name}
+            </p>
             {logEntryMenu.serving_amount && (
               <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>
-                {fmtServing(logEntryMenu.serving_amount, logEntryMenu.serving_unit)}
+                {fmtServing(
+                  logEntryMenu.serving_amount,
+                  logEntryMenu.serving_unit,
+                )}
               </p>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {!savedFoods.some((f) => f.name.toLowerCase() === logEntryMenu.food_name.toLowerCase()) && (
+              {!savedFoods.some(
+                (f) =>
+                  f.name.toLowerCase() === logEntryMenu.food_name.toLowerCase(),
+              ) && (
                 <button
-                  onClick={() => { handleSaveEntryToMyFoods(logEntryMenu); setLogEntryMenu(null); }}
-                  style={{ width: "100%", padding: "13px 0", background: "#f0f7ff", border: "1px solid #c8e0ff", borderRadius: 10, color: "#4f8ef7", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+                  onClick={() => {
+                    handleSaveEntryToMyFoods(logEntryMenu);
+                    setLogEntryMenu(null);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "13px 0",
+                    background: "#f0f7ff",
+                    border: "1px solid #c8e0ff",
+                    borderRadius: 10,
+                    color: "#4f8ef7",
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: "pointer",
+                  }}
                 >
                   ☆ Save to My Food Library
                 </button>
               )}
               <button
-                onClick={() => { if (window.confirm(`Remove "${logEntryMenu.food_name}" from today's log?`)) { handleDelete(logEntryMenu.id); setLogEntryMenu(null); } }}
-                style={{ width: "100%", padding: "13px 0", background: "#fff0f0", border: "1px solid #ffc8c8", borderRadius: 10, color: "#e05c5c", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remove "${logEntryMenu.food_name}" from today's log?`,
+                    )
+                  ) {
+                    handleDelete(logEntryMenu.id);
+                    setLogEntryMenu(null);
+                  }
+                }}
+                style={{
+                  width: "100%",
+                  padding: "13px 0",
+                  background: "#fff0f0",
+                  border: "1px solid #ffc8c8",
+                  borderRadius: 10,
+                  color: "#e05c5c",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
               >
                 Remove from log
               </button>
               <button
                 onClick={() => setLogEntryMenu(null)}
-                style={{ width: "100%", padding: "13px 0", background: "#f7f7fb", border: "none", borderRadius: 10, color: "#888", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+                style={{
+                  width: "100%",
+                  padding: "13px 0",
+                  background: "#f7f7fb",
+                  border: "none",
+                  borderRadius: 10,
+                  color: "#888",
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
               >
                 Cancel
               </button>
@@ -3128,30 +5648,105 @@ export default function Nutrition() {
       {/* Guest macro goals modal */}
       {guestGoalsOpen && (
         <div
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setGuestGoalsOpen(false); }}
-          style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setGuestGoalsOpen(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 500,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
         >
           <div
             onMouseDown={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 16, padding: "24px 20px", width: "100%", maxWidth: 380, maxHeight: "90vh", overflowY: "auto" }}
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              padding: "24px 20px",
+              width: "100%",
+              maxWidth: 380,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontWeight: 700, fontSize: 16 }}>Daily Macro Goals</span>
-              <button onClick={() => setGuestGoalsOpen(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#aaa" }}>✕</button>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 16 }}>
+                Daily Macro Goals
+              </span>
+              <button
+                onClick={() => setGuestGoalsOpen(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  color: "#aaa",
+                }}
+              >
+                ✕
+              </button>
             </div>
-            <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>Sign in to sync goals across devices.</p>
+            <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 18px" }}>
+              Sign in to sync goals across devices.
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {MACROS.map(m => {
+              {MACROS.map((m) => {
                 const dir = guestGoalsForm[m.dirKey] ?? m.defaultDir;
                 return (
-                  <div key={m.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: m.color, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>{m.label}</span>
+                  <div
+                    key={m.key}
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: m.color,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#333",
+                      }}
+                    >
+                      {m.label}
+                    </span>
                     <div style={{ display: "flex", gap: 3 }}>
-                      {["above", "below"].map(d => (
-                        <button key={d} type="button"
-                          onClick={() => setGuestGoalsForm(f => ({ ...f, [m.dirKey]: d }))}
-                          style={{ border: "none", borderRadius: 6, padding: "3px 7px", fontSize: 11, cursor: "pointer", fontWeight: 600, background: dir === d ? "#555" : "#f0f0f0", color: dir === d ? "#fff" : "#aaa" }}>
+                      {["above", "below"].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() =>
+                            setGuestGoalsForm((f) => ({ ...f, [m.dirKey]: d }))
+                          }
+                          style={{
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "3px 7px",
+                            fontSize: 11,
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            background: dir === d ? "#555" : "#f0f0f0",
+                            color: dir === d ? "#fff" : "#aaa",
+                          }}
+                        >
                           {d === "above" ? "≥" : "≤"}
                         </button>
                       ))}
@@ -3160,17 +5755,47 @@ export default function Nutrition() {
                       type="number"
                       min="0"
                       value={guestGoalsForm[m.key] ?? ""}
-                      onChange={e => setGuestGoalsForm(f => ({ ...f, [m.key]: e.target.value === "" ? null : Number(e.target.value) }))}
-                      style={{ padding: "7px 10px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 16, outline: "none", textAlign: "right", background: "#fafafa", width: 80 }}
+                      onChange={(e) =>
+                        setGuestGoalsForm((f) => ({
+                          ...f,
+                          [m.key]:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
+                        }))
+                      }
+                      style={{
+                        padding: "7px 10px",
+                        border: "1px solid #e0e0e0",
+                        borderRadius: 8,
+                        fontSize: 16,
+                        outline: "none",
+                        textAlign: "right",
+                        background: "#fafafa",
+                        width: 80,
+                      }}
                     />
-                    <span style={{ fontSize: 12, color: "#aaa", width: 28 }}>{m.unit}</span>
+                    <span style={{ fontSize: 12, color: "#aaa", width: 28 }}>
+                      {m.unit}
+                    </span>
                   </div>
                 );
               })}
             </div>
             <button
               onClick={saveGuestGoals}
-              style={{ marginTop: 22, width: "100%", padding: "11px 0", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              style={{
+                marginTop: 22,
+                width: "100%",
+                padding: "11px 0",
+                background: "#ff8c42",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
             >
               Save Goals
             </button>
@@ -3179,189 +5804,499 @@ export default function Nutrition() {
       )}
 
       {/* Manual entry wizard modal */}
-      {formOpen && formStep >= 0 && (() => {
-        const isConfirm = formStep === FORM_STEPS.length;
-        const step = !isConfirm ? FORM_STEPS[formStep] : null;
-        const alreadySaved = savedFoods.some(f => f.name.toLowerCase() === form.name.trim().toLowerCase());
+      {formOpen &&
+        formStep >= 0 &&
+        (() => {
+          const isConfirm = formStep === FORM_STEPS.length;
+          const step = !isConfirm ? FORM_STEPS[formStep] : null;
+          const alreadySaved = savedFoods.some(
+            (f) => f.name.toLowerCase() === form.name.trim().toLowerCase(),
+          );
 
-        return (
-          <div
-            onMouseDown={(e) => { if (e.target === e.currentTarget) closeFormModal(); }}
-            style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          >
+          return (
             <div
-              onMouseDown={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 18, padding: "28px 24px 24px", width: "100%", maxWidth: 400 }}
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) closeFormModal();
+              }}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 600,
+                background: "rgba(0,0,0,0.5)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
             >
-              {/* Progress bar */}
-              <div style={{ display: "flex", gap: 4, marginBottom: 28 }}>
-                {FORM_STEPS.map((_, i) => (
-                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 99, background: i < formStep || isConfirm ? "#ff8c42" : i === formStep ? "#ffb380" : "#f0f0f0", transition: "background 0.2s" }} />
-                ))}
-              </div>
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  background: "#fff",
+                  borderRadius: 18,
+                  padding: "28px 24px 24px",
+                  width: "100%",
+                  maxWidth: 400,
+                }}
+              >
+                {/* Progress bar */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 28 }}>
+                  {FORM_STEPS.map((_, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        flex: 1,
+                        height: 3,
+                        borderRadius: 99,
+                        background:
+                          i < formStep || isConfirm
+                            ? "#ff8c42"
+                            : i === formStep
+                              ? "#ffb380"
+                              : "#f0f0f0",
+                        transition: "background 0.2s",
+                      }}
+                    />
+                  ))}
+                </div>
 
-              {!isConfirm ? (
-                <>
-                  <p style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#333" }}>{step.label}</p>
-                  {step.optional && (
-                    <p style={{ fontSize: 13, color: "#bbb", margin: "0 0 20px" }}>Optional — press Enter to skip</p>
-                  )}
-                  {!step.optional && <div style={{ marginBottom: 20 }} />}
-
-                  {step.type === "serving" ? (
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      <input
-                        key={formStep}
-                        autoFocus
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="Amount"
-                        value={form.serving_amount}
-                        onChange={(e) => setForm(f => ({ ...f, serving_amount: e.target.value }))}
-                        onFocus={(e) => setTimeout(() => e.target.select(), 0)}
-                        onKeyDown={(e) => { if (e.key === "Enter") formNext(); }}
-                        style={{ flex: 1, padding: "14px 16px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 20, outline: "none" }}
-                      />
-                      <select
-                        value={form.serving_unit}
-                        onChange={(e) => {
-                          setForm(f => ({ ...f, serving_unit: e.target.value }));
-                          localStorage.setItem(LAST_UNIT_KEY, e.target.value);
+                {!isConfirm ? (
+                  <>
+                    <p
+                      style={{
+                        fontSize: 22,
+                        fontWeight: 700,
+                        margin: "0 0 6px",
+                        color: "#333",
+                      }}
+                    >
+                      {step.label}
+                    </p>
+                    {step.optional && (
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "#bbb",
+                          margin: "0 0 20px",
                         }}
-                        style={{ padding: "14px 12px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 16, outline: "none", background: "#fafafa", cursor: "pointer" }}
                       >
-                        {SERVING_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                      <input
-                        key={formStep}
-                        autoFocus
-                        type={step.type}
-                        name={step.name}
-                        placeholder={step.placeholder}
-                        value={form[step.name]}
-                        onChange={handleChange}
-                        onFocus={(e) => setTimeout(() => e.target.select(), 0)}
-                        onKeyDown={(e) => { if (e.key === "Enter") formNext(); }}
-                        style={{ flex: 1, padding: "14px 16px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 20, outline: "none" }}
-                      />
-                      {step.unit && <span style={{ fontSize: 15, color: "#aaa", flexShrink: 0 }}>{step.unit}</span>}
-                    </div>
-                  )}
-
-                  {error && <p style={{ color: "#e05c5c", fontSize: 13, margin: "4px 0 0" }}>{error}</p>}
-
-                  <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-                    {confirmEdit ? (
-                      <button onClick={formBack} style={{ flex: 1, padding: "11px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                        ← Back to Review
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={formBack} style={{ flex: 1, padding: "11px 0", border: "1px solid #e0e0e0", borderRadius: 10, background: "none", fontSize: 14, cursor: "pointer", color: "#888" }}>
-                          ← Back
-                        </button>
-                        <button onClick={formNext} style={{ flex: 2, padding: "11px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                          {formStep === FORM_STEPS.length - 1 ? "Review →" : "Next →"}
-                        </button>
-                      </>
+                        Optional — press Enter to skip
+                      </p>
                     )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => { setConfirmEdit(true); setFormStep(0); }}
-                    onMouseEnter={() => setConfirmHover("name")}
-                    onMouseLeave={() => setConfirmHover(null)}
-                    style={{ display: "block", width: "100%", textAlign: "left", background: confirmHover === "name" ? "#f7f7fb" : "none", border: `1px solid ${confirmHover === "name" ? "#e0e0e0" : "transparent"}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", marginBottom: 12 }}
-                  >
-                    <div style={{ fontSize: 11, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>Food name</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#333" }}>{form.name}</div>
-                  </button>
+                    {!step.optional && <div style={{ marginBottom: 20 }} />}
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-                    {MACROS.map((m, i) => (
-                      <button
-                        key={m.key}
-                        type="button"
-                        onClick={() => { setConfirmEdit(true); setFormStep(i + 1); }}
-                        onMouseEnter={() => setConfirmHover(m.key)}
-                        onMouseLeave={() => setConfirmHover(null)}
-                        style={{ flex: "1 1 80px", background: confirmHover === m.key ? "#eef4ff" : "#f7f7fb", border: `1px solid ${confirmHover === m.key ? "#93c5fd" : "#e8e8e8"}`, borderRadius: 10, padding: "10px 8px", cursor: "pointer", textAlign: "center", transition: "background 0.15s, border-color 0.15s" }}
+                    {step.type === "serving" ? (
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <input
+                          key={formStep}
+                          autoFocus
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="Amount"
+                          value={form.serving_amount}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              serving_amount: e.target.value,
+                            }))
+                          }
+                          onFocus={(e) =>
+                            setTimeout(() => e.target.select(), 0)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") formNext();
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "14px 16px",
+                            border: "1.5px solid #e0e0e0",
+                            borderRadius: 10,
+                            fontSize: 20,
+                            outline: "none",
+                          }}
+                        />
+                        <select
+                          value={form.serving_unit}
+                          onChange={(e) => {
+                            setForm((f) => ({
+                              ...f,
+                              serving_unit: e.target.value,
+                            }));
+                            localStorage.setItem(LAST_UNIT_KEY, e.target.value);
+                          }}
+                          style={{
+                            padding: "14px 12px",
+                            border: "1.5px solid #e0e0e0",
+                            borderRadius: 10,
+                            fontSize: 16,
+                            outline: "none",
+                            background: "#fafafa",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {SERVING_UNITS.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          marginBottom: 8,
+                        }}
                       >
-                        <div style={{ fontSize: 10, color: "#bbb", fontWeight: 600, marginBottom: 3 }}>{m.label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: m.color }}>{form[m.key] || "0"}</div>
-                        <div style={{ fontSize: 10, color: "#bbb" }}>{m.unit}</div>
-                      </button>
-                    ))}
-                  </div>
+                        <input
+                          key={formStep}
+                          autoFocus
+                          type={step.type}
+                          name={step.name}
+                          placeholder={step.placeholder}
+                          value={form[step.name]}
+                          onChange={handleChange}
+                          onFocus={(e) =>
+                            setTimeout(() => e.target.select(), 0)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") formNext();
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "14px 16px",
+                            border: "1.5px solid #e0e0e0",
+                            borderRadius: 10,
+                            fontSize: 20,
+                            outline: "none",
+                          }}
+                        />
+                        {step.unit && (
+                          <span
+                            style={{
+                              fontSize: 15,
+                              color: "#aaa",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {step.unit}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => { setConfirmEdit(true); setFormStep(FORM_STEPS.length - 1); }}
-                    onMouseEnter={() => setConfirmHover("serving")}
-                    onMouseLeave={() => setConfirmHover(null)}
-                    style={{ display: "block", width: "100%", textAlign: "left", background: confirmHover === "serving" ? "#f7f7fb" : "none", border: `1px solid ${confirmHover === "serving" ? "#e0e0e0" : "transparent"}`, borderRadius: 10, padding: "8px 12px", cursor: "pointer", marginBottom: 16 }}
-                  >
-                    <div style={{ fontSize: 11, color: "#bbb", fontWeight: 600, marginBottom: 2 }}>Serving size</div>
-                    <div style={{ fontSize: 14, color: form.serving_amount ? "#555" : "#bbb" }}>
-                      {form.serving_amount ? fmtServing(Number(form.serving_amount), form.serving_unit) : "Not set"}
+                    {error && (
+                      <p
+                        style={{
+                          color: "#e05c5c",
+                          fontSize: 13,
+                          margin: "4px 0 0",
+                        }}
+                      >
+                        {error}
+                      </p>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                      {confirmEdit ? (
+                        <button
+                          onClick={formBack}
+                          style={{
+                            flex: 1,
+                            padding: "11px 0",
+                            border: "none",
+                            borderRadius: 10,
+                            background: "#ff8c42",
+                            color: "#fff",
+                            fontSize: 14,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ← Back to Review
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={formBack}
+                            style={{
+                              flex: 1,
+                              padding: "11px 0",
+                              border: "1px solid #e0e0e0",
+                              borderRadius: 10,
+                              background: "none",
+                              fontSize: 14,
+                              cursor: "pointer",
+                              color: "#888",
+                            }}
+                          >
+                            ← Back
+                          </button>
+                          <button
+                            onClick={formNext}
+                            style={{
+                              flex: 2,
+                              padding: "11px 0",
+                              border: "none",
+                              borderRadius: 10,
+                              background: "#ff8c42",
+                              color: "#fff",
+                              fontSize: 14,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {formStep === FORM_STEPS.length - 1
+                              ? "Review →"
+                              : "Next →"}
+                          </button>
+                        </>
+                      )}
                     </div>
-                  </button>
-
-                  {error && <p style={{ color: "#e05c5c", fontSize: 13, margin: "0 0 8px" }}>{error}</p>}
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  </>
+                ) : (
+                  <>
                     <button
-                      onClick={() => handleAdd(null)}
-                      style={{ padding: "12px 0", border: "none", borderRadius: 10, background: "#ff8c42", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                      type="button"
+                      onClick={() => {
+                        setConfirmEdit(true);
+                        setFormStep(0);
+                      }}
+                      onMouseEnter={() => setConfirmHover("name")}
+                      onMouseLeave={() => setConfirmHover(null)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background:
+                          confirmHover === "name" ? "#f7f7fb" : "none",
+                        border: `1px solid ${confirmHover === "name" ? "#e0e0e0" : "transparent"}`,
+                        borderRadius: 10,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                        marginBottom: 12,
+                      }}
                     >
-                      + Add to Log
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#bbb",
+                          fontWeight: 600,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Food name
+                      </div>
+                      <div
+                        style={{ fontSize: 18, fontWeight: 700, color: "#333" }}
+                      >
+                        {form.name}
+                      </div>
                     </button>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        marginBottom: 12,
+                      }}
+                    >
+                      {MACROS.map((m, i) => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => {
+                            setConfirmEdit(true);
+                            setFormStep(i + 1);
+                          }}
+                          onMouseEnter={() => setConfirmHover(m.key)}
+                          onMouseLeave={() => setConfirmHover(null)}
+                          style={{
+                            flex: "1 1 80px",
+                            background:
+                              confirmHover === m.key ? "#eef4ff" : "#f7f7fb",
+                            border: `1px solid ${confirmHover === m.key ? "#93c5fd" : "#e8e8e8"}`,
+                            borderRadius: 10,
+                            padding: "10px 8px",
+                            cursor: "pointer",
+                            textAlign: "center",
+                            transition: "background 0.15s, border-color 0.15s",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "#bbb",
+                              fontWeight: 600,
+                              marginBottom: 3,
+                            }}
+                          >
+                            {m.label}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color: m.color,
+                            }}
+                          >
+                            {form[m.key] || "0"}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#bbb" }}>
+                            {m.unit}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
                     <button
-                      onClick={alreadySaved ? undefined : handleSaveToMyFoods}
-                      disabled={alreadySaved}
-                      style={{ padding: "12px 0", border: "1px solid", borderColor: alreadySaved ? "#e0e0e0" : savedFeedback ? "#5cb85c" : "#e0e0e0", borderRadius: 10, background: savedFeedback ? "#5cb85c" : "none", color: savedFeedback ? "#fff" : alreadySaved ? "#bbb" : "#888", fontSize: 13, fontWeight: 600, cursor: alreadySaved ? "default" : "pointer" }}
+                      type="button"
+                      onClick={() => {
+                        setConfirmEdit(true);
+                        setFormStep(FORM_STEPS.length - 1);
+                      }}
+                      onMouseEnter={() => setConfirmHover("serving")}
+                      onMouseLeave={() => setConfirmHover(null)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background:
+                          confirmHover === "serving" ? "#f7f7fb" : "none",
+                        border: `1px solid ${confirmHover === "serving" ? "#e0e0e0" : "transparent"}`,
+                        borderRadius: 10,
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        marginBottom: 16,
+                      }}
                     >
-                      {alreadySaved ? "★ Already in Library" : savedFeedback ? "★ Saved!" : "☆ Save to My Food Library"}
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#bbb",
+                          fontWeight: 600,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Serving size
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: form.serving_amount ? "#555" : "#bbb",
+                        }}
+                      >
+                        {form.serving_amount
+                          ? fmtServing(
+                              Number(form.serving_amount),
+                              form.serving_unit,
+                            )
+                          : "Not set"}
+                      </div>
                     </button>
-                  </div>
-                </>
-              )}
+
+                    {error && (
+                      <p
+                        style={{
+                          color: "#e05c5c",
+                          fontSize: 13,
+                          margin: "0 0 8px",
+                        }}
+                      >
+                        {error}
+                      </p>
+                    )}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <button
+                        onClick={() => handleAdd(null)}
+                        style={{
+                          padding: "12px 0",
+                          border: "none",
+                          borderRadius: 10,
+                          background: "#ff8c42",
+                          color: "#fff",
+                          fontSize: 14,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        + Add to Log
+                      </button>
+                      <button
+                        onClick={alreadySaved ? undefined : handleSaveToMyFoods}
+                        disabled={alreadySaved}
+                        style={{
+                          padding: "12px 0",
+                          border: "1px solid",
+                          borderColor: alreadySaved
+                            ? "#e0e0e0"
+                            : savedFeedback
+                              ? "#5cb85c"
+                              : "#e0e0e0",
+                          borderRadius: 10,
+                          background: savedFeedback ? "#5cb85c" : "none",
+                          color: savedFeedback
+                            ? "#fff"
+                            : alreadySaved
+                              ? "#bbb"
+                              : "#888",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: alreadySaved ? "default" : "pointer",
+                        }}
+                      >
+                        {alreadySaved
+                          ? "★ Already in Library"
+                          : savedFeedback
+                            ? "★ Saved!"
+                            : "☆ Save to My Food Library"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* Logged toast */}
-      <div style={{
-        position: "fixed",
-        bottom: isMobile ? 90 : "auto",
-        top: isMobile ? "auto" : 20,
-        left: isMobile ? "50%" : "auto",
-        right: isMobile ? "auto" : 20,
-        transform: isMobile ? `translateX(-50%) translateY(${toast.visible ? 0 : 20}px)` : `translateY(${toast.visible ? 0 : -10}px)`,
-        opacity: toast.visible ? 1 : 0,
-        pointerEvents: "none",
-        transition: "opacity 0.25s, transform 0.25s",
-        background: toast.color,
-        color: "#fff",
-        borderRadius: 999,
-        padding: "10px 20px",
-        fontSize: 14,
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-        zIndex: 600,
-      }}>
+      <div
+        style={{
+          position: "fixed",
+          bottom: isMobile ? 90 : "auto",
+          top: isMobile ? "auto" : 20,
+          left: isMobile ? "50%" : "auto",
+          right: isMobile ? "auto" : 20,
+          transform: isMobile
+            ? `translateX(-50%) translateY(${toast.visible ? 0 : 20}px)`
+            : `translateY(${toast.visible ? 0 : -10}px)`,
+          opacity: toast.visible ? 1 : 0,
+          pointerEvents: "none",
+          transition: "opacity 0.25s, transform 0.25s",
+          background: toast.color,
+          color: "#fff",
+          borderRadius: 999,
+          padding: "10px 20px",
+          fontSize: 14,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          zIndex: 600,
+        }}
+      >
         {toast.message}
       </div>
     </div>
   );
 }
-

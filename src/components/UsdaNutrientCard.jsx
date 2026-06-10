@@ -42,7 +42,7 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false, styl
         boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
         padding: "14px 18px",
         minWidth: 210,
-        pointerEvents: onClose ? "auto" : "none",
+        pointerEvents: (onClose || onCompare) ? "auto" : "none",
         ...styleProp,
       };
 
@@ -58,11 +58,6 @@ export default function UsdaNutrientCard({ food, scale = 1, inline = false, styl
               {onEdit && (
                 <button onClick={onEdit} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", padding: 0, lineHeight: 1 }} title="Edit food">
                   <MdEdit size={15} />
-                </button>
-              )}
-              {onClose && (
-                <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", color: "#aaa", lineHeight: 1, padding: 0 }}>
-                  ✕
                 </button>
               )}
             </div>
