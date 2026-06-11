@@ -371,6 +371,7 @@ export default function Nutrition() {
   const [pinnedLibraryFood, setPinnedLibraryFood] = useState(null);
   const [editingLibraryFood, setEditingLibraryFood] = useState(null);
   const [editingPlanItem, setEditingPlanItem] = useState(null);
+  const [removePlanConfirm, setRemovePlanConfirm] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [compareFood, setCompareFood] = useState(null);
   const [isMobile, setIsMobile] = useState(
@@ -1585,11 +1586,16 @@ export default function Nutrition() {
     return acc;
   }, {});
 
+  const dayPlanTotals = MACROS.reduce((acc, m) => {
+    acc[m.key] = dayPlanItems.reduce((sum, e) => sum + (e[m.key] || 0), 0);
+    return acc;
+  }, {});
+
   const totals = MACROS.reduce((acc, m) => {
-    const planned = planMode
+    const activePlanned = planMode
       ? plannedEntries.reduce((sum, e) => sum + (e[m.key] || 0), 0)
       : 0;
-    acc[m.key] = actualTotals[m.key] + planned;
+    acc[m.key] = actualTotals[m.key] + activePlanned + dayPlanTotals[m.key];
     return acc;
   }, {});
 
@@ -1927,9 +1933,7 @@ export default function Nutrition() {
                         100,
                         (actualTotals[m.key] / maxVal) * 100,
                       );
-                      const plannedPct = planMode
-                        ? Math.min(100 - actualPct, pct - actualPct)
-                        : 0;
+                      const plannedPct = Math.min(100 - actualPct, pct - actualPct);
                       return (
                         <>
                           <div
@@ -3523,6 +3527,105 @@ export default function Nutrition() {
           );
         })()}
 
+      {/* Remove plan item confirmation modal */}
+      {removePlanConfirm && (() => {
+        const remaining = dayPlanItems.filter(i => i.id !== removePlanConfirm.id);
+        const newDayPlanTotals = MACROS.reduce((acc, m) => {
+          acc[m.key] = remaining.reduce((sum, e) => sum + (e[m.key] || 0), 0);
+          return acc;
+        }, {});
+        const newTotals = MACROS.reduce((acc, m) => {
+          const activePlanned = planMode ? plannedEntries.reduce((sum, e) => sum + (e[m.key] || 0), 0) : 0;
+          acc[m.key] = actualTotals[m.key] + activePlanned + newDayPlanTotals[m.key];
+          return acc;
+        }, {});
+        return (
+          <div
+            onMouseDown={() => setRemovePlanConfirm(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          >
+            <div
+              onMouseDown={e => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 24px", width: "100%", maxWidth: 380 }}
+            >
+              <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 15, color: "#333" }}>
+                Remove from today's plan?
+              </p>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: "#333" }}>
+                {removePlanConfirm.serving_amount
+                  ? <><strong>{fmtServing(removePlanConfirm.serving_amount, removePlanConfirm.serving_unit)}</strong>{" of "}<strong>{removePlanConfirm.food_name}</strong></>
+                  : <strong>{removePlanConfirm.food_name}</strong>}
+              </p>
+
+              <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Daily progress after removal
+              </p>
+              <div style={{ marginBottom: 20 }}>
+                {visibleMacroList.map(m => {
+                  const consumed = newTotals[m.key];
+                  const rawMax = goals[m.key];
+                  const minVal = goals[m.minKey] ?? null;
+                  const isTracked = !!(rawMax || minVal);
+                  const maxVal = rawMax || 1;
+                  const dir = goals[m.dirKey] ?? m.defaultDir;
+                  const over = isTracked && consumed > maxVal;
+                  const under = isTracked && minVal != null && consumed < minVal;
+                  let statusColor;
+                  if (!isTracked) statusColor = "#aaa";
+                  else if (minVal != null) statusColor = over ? "#e05c5c" : under ? "#f0a500" : "#5cb85c";
+                  else statusColor = (dir === "above" ? consumed >= maxVal : consumed <= maxVal) ? "#5cb85c" : "#e05c5c";
+                  const actualPct = isTracked ? Math.min(100, (actualTotals[m.key] / maxVal) * 100) : 0;
+                  const plannedPct = isTracked ? Math.min(100 - actualPct, ((newDayPlanTotals[m.key] + (planMode ? plannedEntries.reduce((s, e) => s + (e[m.key] || 0), 0) : 0)) / maxVal) * 100) : 0;
+                  const removedPct = isTracked ? Math.min(100 - actualPct - plannedPct, ((removePlanConfirm[m.key] || 0) / maxVal) * 100) : 0;
+                  const minPct = (isTracked && minVal != null) ? Math.min(100, (minVal / maxVal) * 100) : null;
+                  return (
+                    <div key={m.key} style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, fontSize: 12 }}>
+                        <span style={{ fontWeight: 600, color: "#333", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+                          {m.label}
+                        </span>
+                        <span style={{ color: statusColor, fontWeight: isTracked ? 600 : 400 }}>
+                          {m.key === "calories" ? consumed.toFixed(0) : consumed.toFixed(1)}
+                          {isTracked ? ` / ${minVal != null ? `${minVal}–${maxVal}` : maxVal} ${m.unit}` : ` ${m.unit}`}
+                        </span>
+                      </div>
+                      <div style={{ height: 7, background: "#f0f0f0", borderRadius: 99, position: "relative", overflow: "hidden" }}>
+                        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${actualPct}%`, background: m.color }} />
+                        {plannedPct > 0 && (
+                          <div style={{ position: "absolute", left: `${actualPct}%`, top: 0, height: "100%", width: `${plannedPct}%`, background: "#93c5fd" }} />
+                        )}
+                        {removedPct > 0 && (
+                          <div style={{ position: "absolute", left: `${actualPct + plannedPct}%`, top: 0, height: "100%", width: `${removedPct}%`, background: "#e05c5c", opacity: 0.7 }} />
+                        )}
+                        {minPct != null && (
+                          <div style={{ position: "absolute", left: `${minPct}%`, top: -1, bottom: -1, width: 2, background: "rgba(0,0,0,0.2)", borderRadius: 1, zIndex: 1 }} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => setRemovePlanConfirm(null)}
+                  style={{ flex: 1, padding: "10px 0", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", fontSize: 14, cursor: "pointer", color: "#555" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { removePlanItem(removePlanConfirm.id); setRemovePlanConfirm(null); }}
+                  style={{ flex: 2, padding: "10px 0", border: "none", borderRadius: 8, background: "#e05c5c", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Edit plan item modal */}
       {editingPlanItem && (
         <div
@@ -4345,7 +4448,7 @@ export default function Nutrition() {
                         style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}
                       ><MdEdit size={16} /></button>
                       <button
-                        onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
+                        onClick={() => setRemovePlanConfirm(item)}
                         style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
                       >✕</button>
                     </div>
@@ -4825,14 +4928,7 @@ export default function Nutrition() {
                           <MdEdit size={16} />
                         </button>
                         <button
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remove "${item.food_name}" from today's plan?`,
-                              )
-                            )
-                              removePlanItem(item.id);
-                          }}
+                          onClick={() => setRemovePlanConfirm(item)}
                           style={{
                             background: "#dbeafe",
                             border: "1px solid #93c5fd",
