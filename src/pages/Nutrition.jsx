@@ -4286,121 +4286,72 @@ export default function Nutrition() {
                 >
                   Planned — tap ✓ when complete
                 </p>
-                {dayPlanItems.map((item) => (
+                {dayPlanItems.map((item) => {
+                  const isExpanded = expandedLogIds.has(item.id);
+                  return (
                   <div
                     key={item.id}
+                    onClick={() => setExpandedLogIds(prev => {
+                      const next = new Set(prev);
+                      next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                      return next;
+                    })}
                     style={{
                       background: "#eff6ff",
                       border: "1.5px solid #93c5fd",
                       borderRadius: 10,
                       padding: "10px 12px",
                       marginBottom: 6,
+                      cursor: "pointer",
+                      WebkitTapHighlightColor: "transparent",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "baseline",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          fontSize: 14,
-                          color: "#1d4ed8",
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          marginRight: 8,
-                        }}
-                      >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: "#1d4ed8", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
                         {item.food_name}
                       </span>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          color: "#4f8ef7",
-                          fontWeight: 700,
-                          flexShrink: 0,
-                        }}
-                      >
+                      <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 700, flexShrink: 0 }}>
                         {item.calories} kcal
                       </span>
                     </div>
                     {item.serving_amount && (
-                      <div
-                        style={{ fontSize: 12, color: "#93c5fd", marginTop: 2 }}
-                      >
+                      <div style={{ fontSize: 12, color: "#93c5fd", marginTop: 2 }}>
                         {fmtServing(item.serving_amount, item.serving_unit)}
                       </div>
                     )}
-                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    {isExpanded && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #bfdbfe" }}>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {visibleMacroList.map((m) => (
+                            <div key={m.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 44 }}>
+                              <span style={{ fontSize: 10, color: "#93c5fd", fontWeight: 500, marginBottom: 1 }}>
+                                {{ calories: "Calories", protein: "Protein", carbs: "Carbs", fat: "Fat", fiber: "Fiber", sugar: "Sugar" }[m.key]}
+                              </span>
+                              <span style={{ fontSize: 13, color: "#4f8ef7", fontWeight: 600 }}>
+                                {item[m.key] > 0 ? (m.key === "calories" ? item[m.key] : item[m.key].toFixed(1)) : "—"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }} onClick={e => e.stopPropagation()}>
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Mark "${item.food_name}" as complete?`,
-                            )
-                          )
-                            markPlanItemComplete(item);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "7px 0",
-                          background: "#4f8ef7",
-                          border: "none",
-                          borderRadius: 8,
-                          color: "#fff",
-                          fontWeight: 700,
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✓ Mark as Complete
-                      </button>
+                        onClick={() => { if (window.confirm(`Mark "${item.food_name}" as complete?`)) markPlanItemComplete(item); }}
+                        style={{ flex: 1, padding: "7px 0", background: "#4f8ef7", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                      >✓ Mark as Complete</button>
                       <button
                         onClick={() => editPlanItem(item.id)}
-                        style={{
-                          padding: "7px 10px",
-                          background: "none",
-                          border: "1px solid #93c5fd",
-                          borderRadius: 8,
-                          color: "#93c5fd",
-                          fontSize: 13,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                      >
-                        <MdEdit size={16} />
-                      </button>
+                        style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center" }}
+                      ><MdEdit size={16} /></button>
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Remove "${item.food_name}" from today's plan?`,
-                            )
-                          )
-                            removePlanItem(item.id);
-                        }}
-                        style={{
-                          padding: "7px 10px",
-                          background: "none",
-                          border: "1px solid #93c5fd",
-                          borderRadius: 8,
-                          color: "#93c5fd",
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        ✕
-                      </button>
+                        onClick={() => { if (window.confirm(`Remove "${item.food_name}" from today's plan?`)) removePlanItem(item.id); }}
+                        style={{ padding: "7px 10px", background: "none", border: "1px solid #93c5fd", borderRadius: 8, color: "#93c5fd", fontSize: 13, cursor: "pointer" }}
+                      >✕</button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <div
