@@ -1438,6 +1438,7 @@ export default function Nutrition() {
 
   async function handleDeleteSelected() {
     const ids = [...selectedEntryIds];
+    if (!window.confirm(`Remove ${ids.length} ${ids.length === 1 ? "entry" : "entries"} from today's log?`)) return;
     const next = entries.filter((e) => !selectedEntryIds.has(e.id));
     if (!user) {
       setEntries(next);
