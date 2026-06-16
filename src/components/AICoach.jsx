@@ -7,6 +7,19 @@ function formatDate(dateStr) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+const FOLLOW_UP_LIMIT = 3;
+const PROFILE_INFO_MESSAGE =
+  "I'll be here whenever you need me — you can find me anytime at the bottom of your Profile page. Feel free to ask a few more questions about your plan before we wrap up.";
+
+function appendRecommendations(reply, priorMessages) {
+  const content = reply.replace("[RECOMMENDATIONS]", "").trim();
+  return [
+    ...priorMessages,
+    { role: "assistant", content, isRecommendation: true },
+    { role: "assistant", content: PROFILE_INFO_MESSAGE },
+  ];
+}
+
 export default function AICoach({ open, onClose, goals, userId }) {
   const [phase, setPhase] = useState("setup");
   const [loggedDays, setLoggedDays] = useState([]);
@@ -16,6 +29,7 @@ export default function AICoach({ open, onClose, goals, userId }) {
   const [loading, setLoading] = useState(false);
   const [userData, setUserData] = useState(null);
   const [error, setError] = useState(null);
+  const [followUpCount, setFollowUpCount] = useState(0);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -28,6 +42,7 @@ export default function AICoach({ open, onClose, goals, userId }) {
       setLoading(false);
       setUserData(null);
       setError(null);
+      setFollowUpCount(0);
       return;
     }
     fetchLoggedDaySummaries(userId).then(setLoggedDays);
@@ -75,8 +90,13 @@ export default function AICoach({ open, onClose, goals, userId }) {
       setUserData(data);
       const reply = await callCoach([{ role: "user", content: "Please analyze my data and start with your first question." }], data);
       const isComplete = reply.startsWith("[RECOMMENDATIONS]");
-      setMessages([{ role: "assistant", content: isComplete ? reply.replace("[RECOMMENDATIONS]", "").trim() : reply }]);
-      setPhase(isComplete ? "complete" : "questioning");
+      if (isComplete) {
+        setMessages(appendRecommendations(reply, []));
+        setPhase("complete");
+      } else {
+        setMessages([{ role: "assistant", content: reply }]);
+        setPhase("questioning");
+      }
     } catch (e) {
       setError(e.message);
       setPhase("error");
@@ -85,6 +105,9 @@ export default function AICoach({ open, onClose, goals, userId }) {
 
   async function handleSubmit() {
     if (!inputValue.trim() || loading) return;
+    const isFollowUp = phase === "complete";
+    if (isFollowUp && followUpCount >= FOLLOW_UP_LIMIT) return;
+
     const userMsg = { role: "user", content: inputValue.trim() };
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
@@ -93,10 +116,18 @@ export default function AICoach({ open, onClose, goals, userId }) {
     setError(null);
     try {
       const reply = await callCoach(nextMessages, userData);
-      const isComplete = reply.startsWith("[RECOMMENDATIONS]");
-      const content = isComplete ? reply.replace("[RECOMMENDATIONS]", "").trim() : reply;
-      setMessages([...nextMessages, { role: "assistant", content }]);
-      if (isComplete) setPhase("complete");
+      if (isFollowUp) {
+        setMessages([...nextMessages, { role: "assistant", content: reply }]);
+        setFollowUpCount((c) => c + 1);
+      } else {
+        const isComplete = reply.startsWith("[RECOMMENDATIONS]");
+        if (isComplete) {
+          setMessages(appendRecommendations(reply, nextMessages));
+          setPhase("complete");
+        } else {
+          setMessages([...nextMessages, { role: "assistant", content: reply }]);
+        }
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -201,8 +232,7 @@ export default function AICoach({ open, onClose, goals, userId }) {
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
               {messages.map((msg, i) => {
                 const isUser = msg.role === "user";
-                const isReco = phase === "complete" && !isUser && i === messages.length - 1;
-                if (isReco) {
+                if (msg.isRecommendation) {
                   return (
                     <div key={i} style={{ background: "#f0f9f0", border: "1px solid #5cb85c", borderRadius: 12, padding: "14px 16px" }}>
                       <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#5cb85c", textTransform: "uppercase", letterSpacing: "0.05em" }}>Recommendations</p>
@@ -232,14 +262,14 @@ export default function AICoach({ open, onClose, goals, userId }) {
               <div ref={messagesEndRef} />
             </div>
 
-            {phase === "questioning" && (
+            {(phase === "questioning" || (phase === "complete" && followUpCount < FOLLOW_UP_LIMIT)) && (
               <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f0f0f0", flexShrink: 0 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
                   <textarea
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                    placeholder="Type your answer…"
+                    placeholder={phase === "complete" ? "Ask a follow-up question…" : "Type your answer…"}
                     rows={2}
                     style={{ flex: 1, padding: "10px 12px", border: "1.5px solid #e0e0e0", borderRadius: 10, fontSize: 14, outline: "none", resize: "none", fontFamily: "inherit", lineHeight: 1.5 }}
                   />
@@ -251,7 +281,18 @@ export default function AICoach({ open, onClose, goals, userId }) {
                     Send
                   </button>
                 </div>
-                <p style={{ margin: "6px 0 0", fontSize: 11, color: "#bbb" }}>Enter to send · Shift+Enter for new line</p>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "#bbb" }}>
+                  {phase === "complete"
+                    ? `${FOLLOW_UP_LIMIT - followUpCount} question${FOLLOW_UP_LIMIT - followUpCount === 1 ? "" : "s"} left this session · Enter to send`
+                    : "Enter to send · Shift+Enter for new line"}
+                </p>
+              </div>
+            )}
+            {phase === "complete" && followUpCount >= FOLLOW_UP_LIMIT && (
+              <div style={{ padding: "12px 20px 20px", borderTop: "1px solid #f0f0f0", flexShrink: 0 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "#bbb", textAlign: "center" }}>
+                  You've used all your questions for this session — see you in your Profile next time!
+                </p>
               </div>
             )}
           </>
