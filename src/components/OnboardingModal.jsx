@@ -67,8 +67,8 @@ export function applyGoalToggle(current, val) {
   return [...current.filter(g => getGoalGroup(g) === group), val];
 }
 
-export function calcSuggested({ gender, age, birth_date, height_cm, weight_kg, fitness_goals, activity_level, deficitSeverity, surplusSeverity }) {
-  const a = birth_date ? getAge(birth_date) : Number(age);
+export function calcSuggested({ gender, age, date_of_birth, height_cm, weight_kg, fitness_goals, activity_level, deficitSeverity, surplusSeverity }) {
+  const a = date_of_birth ? getAge(date_of_birth) : Number(age);
   if (!weight_kg || !height_cm || !a) return null;
   const w = Number(weight_kg), h = Number(height_cm);
   const bmr = gender === "male"
@@ -259,7 +259,7 @@ export default function OnboardingModal() {
   const [importOpen, setImportOpen] = useState(false);
 
   const [profile, setProfile] = useState({
-    gender: "male", birth_date: "", height_cm: "", weight_kg: "",
+    gender: "male", date_of_birth: "", height_cm: "", weight_kg: "",
     experience_level: "beginner",
     fitness_goals: ["maintain"],
     activity_level: "moderate",
@@ -338,22 +338,31 @@ export default function OnboardingModal() {
 
   async function handleSave() {
     setSaving(true);
-    const weightKg = Number(profile.weight_kg) || null;
+    const { gender, date_of_birth, height_cm, weight_kg, ...goalProfile } = profile;
+    const weightKg = Number(weight_kg) || null;
     const d = new Date();
     const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    await supabase.from("nutrition_goals").upsert(
-      {
-        user_id: user.id,
-        ...profile,
-        age: getAge(profile.birth_date),
-        fitness_goal: profile.fitness_goals[0] ?? "maintain",
-        preferred_weight_unit: weightUnit,
-        preferred_height_unit: heightUnit,
-        starting_weight_kg: weightKg,
-        ...macros,
-      },
-      { onConflict: "user_id" }
-    );
+    await Promise.all([
+      supabase.from("nutrition_goals").upsert(
+        {
+          user_id: user.id,
+          ...goalProfile,
+          age: getAge(date_of_birth),
+          fitness_goal: profile.fitness_goals[0] ?? "maintain",
+          starting_weight_kg: weightKg,
+          ...macros,
+        },
+        { onConflict: "user_id" }
+      ),
+      supabase.from("user_info").upsert(
+        { user_id: user.id, gender, date_of_birth, height_cm, weight_kg },
+        { onConflict: "user_id" }
+      ),
+      supabase.from("user_preferences").upsert(
+        { user_id: user.id, preferred_weight_unit: weightUnit, preferred_height_unit: heightUnit },
+        { onConflict: "user_id" }
+      ),
+    ]);
     if (weightKg) {
       await supabase.from("weight_logs").upsert(
         { user_id: user.id, date: todayStr, weight_kg: weightKg },
@@ -364,7 +373,7 @@ export default function OnboardingModal() {
     setSaving(false);
   }
 
-  const canNext1 = profile.birth_date && profile.height_cm && profile.weight_kg;
+  const canNext1 = profile.date_of_birth && profile.height_cm && profile.weight_kg;
   const suggested = calcSuggested({ ...profile, deficitSeverity, surplusSeverity });
 
   return (
@@ -414,14 +423,14 @@ export default function OnboardingModal() {
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Date of Birth</span>
                   <BirthDateInput
-                    value={profile.birth_date}
-                    onChange={v => setP("birth_date", v)}
+                    value={profile.date_of_birth}
+                    onChange={v => setP("date_of_birth", v)}
                     style={{ ...numInput, width: "auto", textAlign: "left" }}
                   />
                 </div>
-                {profile.birth_date && (
+                {profile.date_of_birth && (
                   <p style={{ fontSize: 12, color: "#aaa", margin: "4px 0 0", textAlign: "right" }}>
-                    Age: {getAge(profile.birth_date)} years
+                    Age: {getAge(profile.date_of_birth)} years
                   </p>
                 )}
               </div>
