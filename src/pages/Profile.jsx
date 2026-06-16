@@ -177,7 +177,6 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [weighInOpen, setWeighInOpen] = useState(false);
   const [weighInValue, setWeighInValue] = useState("");
-  const [isReWeigh, setIsReWeigh] = useState(false);
   const [goalWeightEditing, setGoalWeightEditing] = useState(false);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [unitPrefsOpen, setUnitPrefsOpen] = useState(false);
@@ -344,19 +343,7 @@ export default function Profile() {
   }
 
   function openWeighIn() {
-    setIsReWeigh(false);
     setWeighInValue("");
-    setWeighInOpen(true);
-  }
-
-  function openReWeigh() {
-    setIsReWeigh(true);
-    if (weightLogs.length > 0) {
-      const latest = weightLogs[weightLogs.length - 1];
-      setWeighInValue(dispWeight(latest.weight_kg, weightUnit, goals.weight_decimal_places || 1));
-    } else {
-      setWeighInValue("");
-    }
     setWeighInOpen(true);
   }
 
@@ -365,34 +352,41 @@ export default function Profile() {
     const kg =
       weightUnit === "lbs" ? lbsToKg(weighInValue) : Number(weighInValue);
     if (!kg) return;
-    let dateStr;
-    if (isReWeigh && weightLogs.length > 0) {
-      dateStr = weightLogs[weightLogs.length - 1].date;
-    } else {
-      const d = new Date();
-      dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    }
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const todayLog = weightLogs.find((l) => l.date === dateStr);
+    const isReplacingStart = todayLog && Number(goals.starting_weight_kg) === todayLog.weight_kg;
+    const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === (goals.weigh_in_frequency || "weekly"))?.days ?? 7;
+    const nd = new Date(dateStr + "T00:00:00");
+    nd.setDate(nd.getDate() + freqDays);
+    const nextDate = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-${String(nd.getDate()).padStart(2, "0")}`;
     const ops = [
-      supabase
-        .from("weight_logs")
-        .upsert(
-          { user_id: user.id, date: dateStr, weight_kg: kg },
-          { onConflict: "user_id,date" },
-        ),
+      supabase.from("weight_logs").upsert(
+        { user_id: user.id, date: dateStr, weight_kg: kg },
+        { onConflict: "user_id,date" },
+      ),
+      supabase.from("nutrition_goals").upsert(
+        {
+          user_id: user.id,
+          next_weigh_in_date: nextDate,
+          ...(isReplacingStart ? { starting_weight_kg: kg } : {}),
+        },
+        { onConflict: "user_id" },
+      ),
     ];
-    if (!isReWeigh) {
-      const freqDays = WEIGH_FREQ_OPTIONS.find(f => f.value === (goals.weigh_in_frequency || "weekly"))?.days ?? 7;
-      const d = new Date(dateStr + "T00:00:00");
-      d.setDate(d.getDate() + freqDays);
-      const nextDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (isReplacingStart) {
       ops.push(
-        supabase.from("nutrition_goals").upsert(
-          { user_id: user.id, next_weigh_in_date: nextDate },
+        supabase.from("user_info").upsert(
+          { user_id: user.id, weight_kg: kg },
           { onConflict: "user_id" },
-        )
+        ),
       );
-      setGoals(g => ({ ...g, next_weigh_in_date: nextDate }));
     }
+    setGoals(g => ({
+      ...g,
+      next_weigh_in_date: nextDate,
+      ...(isReplacingStart ? { starting_weight_kg: kg } : {}),
+    }));
     await Promise.all(ops);
     setGStr("weight_kg", kg);
     setLbsVal(String(kgToLbs(kg)));
@@ -404,7 +398,6 @@ export default function Profile() {
     });
     setWeighInOpen(false);
     setWeighInValue("");
-    setIsReWeigh(false);
   }
 
   if (!user) {
@@ -632,39 +625,9 @@ export default function Profile() {
                 >
                   Weigh in
                 </button>
-                {latestWeightKg ? (
-                  <button
-                    type="button"
-                    onClick={openReWeigh}
-                    title="Edit most recent weigh-in"
-                    className="weight-value-btn"
-                    style={{
-                      fontSize: 14,
-                      color: "#555",
-                      textAlign: "right",
-                      background: "none",
-                      border: "1px solid transparent",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      padding: "2px 5px",
-                      fontFamily: "inherit",
-                      marginRight: 2,
-                    }}
-                  >
-                    {dispWeight(latestWeightKg, weightUnit, goals.weight_decimal_places || 1)}
-                  </button>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: 14,
-                      color: "#ccc",
-                      minWidth: 60,
-                      textAlign: "right",
-                    }}
-                  >
-                    —
-                  </span>
-                )}
+                <span style={{ fontSize: 14, color: latestWeightKg ? "#555" : "#ccc", minWidth: 60, textAlign: "right" }}>
+                  {latestWeightKg ? dispWeight(latestWeightKg, weightUnit, goals.weight_decimal_places || 1) : "—"}
+                </span>
                 <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>
                   {weightUnit}
                 </span>
@@ -1429,7 +1392,7 @@ export default function Profile() {
               }}
             >
               <span style={{ fontWeight: 700, fontSize: 16, color: "#333" }}>
-                {isReWeigh ? "Edit Weigh-In" : "Weigh In"}
+                Weigh In
               </span>
               <button
                 type="button"
@@ -1448,17 +1411,6 @@ export default function Profile() {
             </div>
             {(() => {
               const todayLog = weightLogs.find(l => l.date === todayDateStr);
-              if (isReWeigh && latestWeighInDate) {
-                return (
-                  <p style={{ fontSize: 12, color: "#aaa", margin: "0 0 16px" }}>
-                    Editing entry from{" "}
-                    {new Date(latestWeighInDate + "T00:00:00").toLocaleDateString(
-                      "en-US",
-                      { month: "short", day: "numeric", year: "numeric" },
-                    )}
-                  </p>
-                );
-              }
               if (todayLog) {
                 return (
                   <p style={{ fontSize: 13, color: "#f0a500", lineHeight: 1.55, margin: "0 0 16px", background: "#fffbf0", border: "1px solid #f7e0a0", borderRadius: 9, padding: "10px 14px" }}>
@@ -1531,7 +1483,7 @@ export default function Profile() {
                   cursor: weighInValue ? "pointer" : "default",
                 }}
               >
-                {isReWeigh ? "Update Weight" : "Log Weight"}
+                Log Weight
               </button>
             </form>
           </div>
