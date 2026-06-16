@@ -82,6 +82,39 @@ input:focus::placeholder {
   .app { padding-bottom: 72px; }
 }
 
+/* AI Coach prompt */
+.ai-coach-prompt-backdrop {
+  display: none;
+}
+.ai-coach-prompt {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  z-index: 650;
+}
+
+@media (max-width: 768px) {
+  .ai-coach-prompt-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 649;
+  }
+  .ai-coach-prompt {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+}
+
 /* Profile page layout */
 .profile-page {
   max-width: 480px;

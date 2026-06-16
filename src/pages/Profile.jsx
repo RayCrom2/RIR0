@@ -14,6 +14,7 @@ import {
   BirthDateInput,
 } from "../components/OnboardingModal";
 import FoodImportModal from "../components/FoodImportModal";
+import AICoach from "../components/AICoach";
 
 function cmToFtIn(cm) {
   const totalIn = Number(cm) / 2.54;
@@ -182,6 +183,7 @@ export default function Profile() {
   const [unitPrefsOpen, setUnitPrefsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pwaSheetOpen, setPwaSheetOpen] = useState(false);
+  const [aiCoachOpen, setAICoachOpen] = useState(false);
   const showPwaCard = !isPwaStandalone() && window.matchMedia("(max-width: 767px)").matches;
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
   const [surplusSeverity, setSurplusSeverity] = useState("moderate");
@@ -431,6 +433,16 @@ export default function Profile() {
   const latestWeighInDate =
     weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].date : null;
   const shouldShowWeighIn = !goals.next_weigh_in_date || todayDateStr >= goals.next_weigh_in_date;
+
+  const coachAvailable = weightLogs.length >= 3 && (() => {
+    const sorted = [...weightLogs].sort((a, b) => a.date.localeCompare(b.date));
+    const span = (new Date(sorted.at(-1).date) - new Date(sorted[0].date)) / 86400000;
+    if (span < 14) return false;
+    return sorted.some((w) => {
+      const d = (new Date(w.date) - new Date(sorted[0].date)) / 86400000;
+      return d >= 5 && d <= 9;
+    });
+  })();
 
   // Compute TDEE for display in suggestion card
   const computedAge = getAge(goals.birth_date) ?? Number(goals.age);
@@ -1304,6 +1316,23 @@ export default function Profile() {
         </div>
       )}
 
+      {coachAvailable && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>
+          <div style={{ fontSize: 28, flexShrink: 0 }}>🤖</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14, color: "#333" }}>AI Nutrition Coach</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Personalized recommendations based on your 14+ days of data</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAICoachOpen(true)}
+            style={{ flexShrink: 0, background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            Start
+          </button>
+        </div>
+      )}
+
       {user && (
         <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px", boxShadow: "0 4px 14px rgba(0,0,0,0.07)", display: "flex", alignItems: "center", gap: 14, marginTop: 24 }}>
           <div style={{ fontSize: 28, flexShrink: 0 }}>📥</div>
@@ -1347,6 +1376,13 @@ export default function Profile() {
           onDismiss={() => setPwaSheetOpen(false)}
         />
       )}
+
+      <AICoach
+        open={aiCoachOpen}
+        onClose={() => setAICoachOpen(false)}
+        goals={goals}
+        userId={user?.id}
+      />
 
       {weighInOpen && (
         <div
