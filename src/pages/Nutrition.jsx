@@ -15,6 +15,7 @@ import NutritionCalendar from "../components/NutritionCalendar";
 import AICoach from "../components/AICoach";
 import AICoachPrompt from "../components/AICoachPrompt";
 import { checkCoachStatus } from "../lib/aiCoachData";
+import { unpackMacros } from "../components/OnboardingModal";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -635,39 +636,30 @@ export default function Nutrition() {
       }
       return;
     }
-    supabase
-      .from("nutrition_goals")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setGoals(data);
-      });
-  }, [user]);
-
-  // ── load macro preferences from DB
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("user_preferences")
-      .select("nutrition_visible_macros, preferred_weight_unit, preferred_height_unit")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        if (Array.isArray(data.nutrition_visible_macros)) {
-          setVisibleMacros(new Set(data.nutrition_visible_macros));
-          localStorage.setItem(
-            VISIBLE_KEY,
-            JSON.stringify(data.nutrition_visible_macros),
-          );
-        }
-        setGoals((g) => ({
-          ...g,
-          preferred_weight_unit: data.preferred_weight_unit ?? g.preferred_weight_unit,
-          preferred_height_unit: data.preferred_height_unit ?? g.preferred_height_unit,
-        }));
-      });
+    Promise.all([
+      supabase.from("nutrition_goals").select("macros, body_composition_goals, activity_level, experience_level").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_info").select("weight_kg, next_weigh_in_date").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_preferences").select("nutrition_visible_macros, preferred_weight_unit, preferred_height_unit, weight_decimal_places, hide_weight_prompt, weigh_in_frequency").eq("user_id", user.id).maybeSingle(),
+    ]).then(([{ data: ng }, { data: info }, { data: prefs }]) => {
+      if (Array.isArray(prefs?.nutrition_visible_macros)) {
+        setVisibleMacros(new Set(prefs.nutrition_visible_macros));
+        localStorage.setItem(VISIBLE_KEY, JSON.stringify(prefs.nutrition_visible_macros));
+      }
+      setGoals((g) => ({
+        ...g,
+        ...unpackMacros(ng?.macros),
+        body_composition_goals: ng?.body_composition_goals ?? g.body_composition_goals,
+        activity_level: ng?.activity_level ?? g.activity_level,
+        experience_level: ng?.experience_level ?? g.experience_level,
+        weight_kg: info?.weight_kg ?? g.weight_kg,
+        next_weigh_in_date: info?.next_weigh_in_date ?? g.next_weigh_in_date,
+        preferred_weight_unit: prefs?.preferred_weight_unit ?? g.preferred_weight_unit,
+        preferred_height_unit: prefs?.preferred_height_unit ?? g.preferred_height_unit,
+        weight_decimal_places: prefs?.weight_decimal_places ?? g.weight_decimal_places,
+        hide_weight_prompt: prefs?.hide_weight_prompt ?? g.hide_weight_prompt,
+        weigh_in_frequency: prefs?.weigh_in_frequency ?? g.weigh_in_frequency,
+      }));
+    });
   }, [user]);
 
   // ── check AI coach eligibility
@@ -1340,14 +1332,7 @@ export default function Nutrition() {
           { onConflict: "user_id,date" },
         ),
       supabase.from("user_info").upsert(
-        { user_id: user.id, weight_kg: kg },
-        { onConflict: "user_id" },
-      ),
-      supabase.from("nutrition_goals").upsert(
-        {
-          user_id: user.id,
-          next_weigh_in_date: nextWeighInDate,
-        },
+        { user_id: user.id, weight_kg: kg, next_weigh_in_date: nextWeighInDate },
         { onConflict: "user_id" },
       ),
     ]);
@@ -2095,7 +2080,7 @@ export default function Nutrition() {
                   if (user) {
                     const nextDate = tomorrowStr();
                     await supabase
-                      .from("nutrition_goals")
+                      .from("user_info")
                       .upsert(
                         { user_id: user.id, next_weigh_in_date: nextDate },
                         { onConflict: "user_id" },
@@ -2119,7 +2104,7 @@ export default function Nutrition() {
                 onClick={async () => {
                   if (!user) return;
                   await supabase
-                    .from("nutrition_goals")
+                    .from("user_preferences")
                     .upsert(
                       { user_id: user.id, hide_weight_prompt: true },
                       { onConflict: "user_id" },

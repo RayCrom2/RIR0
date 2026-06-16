@@ -158,7 +158,7 @@ export async function checkCoachStatus(userId, goals) {
   const startKg = Number(goals?.starting_weight_kg) || logs[0]?.weight_kg || null;
   if (latestKg == null || startKg == null) return { eligible: true, onTrack: null };
 
-  const fitnessGoals = goals?.fitness_goals ?? [];
+  const fitnessGoals = goals?.body_composition_goals ?? [];
   const isLoss = fitnessGoals.some((g) => ["lose_weight", "lose_fat"].includes(g));
   const isGain = fitnessGoals.some((g) => ["gain_muscle", "gain_weight"].includes(g));
   const moved = startKg - latestKg;

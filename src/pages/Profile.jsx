@@ -12,6 +12,8 @@ import {
   calcSuggested,
   getAge,
   BirthDateInput,
+  packMacros,
+  unpackMacros,
 } from "../components/OnboardingModal";
 import FoodImportModal from "../components/FoodImportModal";
 import AICoach from "../components/AICoach";
@@ -157,7 +159,7 @@ const DEFAULT_GOALS = {
   preferred_height_unit: "cm",
   experience_level: "beginner",
   fitness_goal: "maintain",
-  fitness_goals: ["maintain"],
+  body_composition_goals: ["maintain"],
   activity_level: "moderate",
   weigh_in_frequency: "weekly",
   weight_decimal_places: 1,
@@ -195,22 +197,27 @@ export default function Profile() {
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      supabase.from("nutrition_goals").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("user_info").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("user_preferences").select("preferred_weight_unit, preferred_height_unit").eq("user_id", user.id).maybeSingle(),
+      supabase.from("nutrition_goals").select("macros, body_composition_goals, activity_level, experience_level").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_info").select("date_of_birth, gender, height_cm, weight_kg, starting_weight_kg, target_weight_kg, next_weigh_in_date").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_preferences").select("preferred_weight_unit, preferred_height_unit, weight_decimal_places, hide_weight_prompt, weigh_in_frequency").eq("user_id", user.id).maybeSingle(),
     ])
       .then(([{ data: ng }, { data: info }, { data: prefs }]) => {
-        const data = ng || info || prefs ? { ...ng, ...info, ...prefs } : null;
-        if (data) {
-          const merged = { ...DEFAULT_GOALS, ...data };
-          // Backwards compat: derive fitness_goals from fitness_goal if not set
-          if (!data.fitness_goals?.length) {
-            merged.fitness_goals = data.fitness_goal
-              ? [data.fitness_goal]
-              : ["maintain"];
-          }
+        if (ng || info || prefs) {
+          const merged = {
+            ...DEFAULT_GOALS,
+            ...unpackMacros(ng?.macros),
+            body_composition_goals: ng?.body_composition_goals ?? DEFAULT_GOALS.body_composition_goals,
+            activity_level: ng?.activity_level ?? DEFAULT_GOALS.activity_level,
+            experience_level: ng?.experience_level ?? DEFAULT_GOALS.experience_level,
+            ...(info || {}),
+            preferred_weight_unit: prefs?.preferred_weight_unit ?? DEFAULT_GOALS.preferred_weight_unit,
+            preferred_height_unit: prefs?.preferred_height_unit ?? DEFAULT_GOALS.preferred_height_unit,
+            weight_decimal_places: prefs?.weight_decimal_places ?? DEFAULT_GOALS.weight_decimal_places,
+            hide_weight_prompt: prefs?.hide_weight_prompt ?? DEFAULT_GOALS.hide_weight_prompt,
+            weigh_in_frequency: prefs?.weigh_in_frequency ?? DEFAULT_GOALS.weigh_in_frequency,
+          };
           setGoals(merged);
-          const fg = merged.fitness_goals ?? ["maintain"];
+          const fg = merged.body_composition_goals ?? ["maintain"];
           if (fg.some((g) => ["lose_weight", "lose_fat"].includes(g))) {
             setDeficitSeverity(detectSeverity(merged, DEFICIT_SEVERITY));
           } else if (fg.some((g) => ["gain_muscle", "gain_weight"].includes(g))) {
@@ -218,17 +225,18 @@ export default function Profile() {
           }
           const enabled = {};
           MACRO_FIELDS.forEach((f) => {
-            if (data[f.minKey] != null) enabled[f.key] = true;
+            if (merged[f.minKey] != null) enabled[f.key] = true;
           });
-          const wUnit = data.preferred_weight_unit || "kg";
-          const hUnit = data.preferred_height_unit || "cm";
+          setRangeEnabled(enabled);
+          const wUnit = merged.preferred_weight_unit || "kg";
+          const hUnit = merged.preferred_height_unit || "cm";
           setHeightUnit(hUnit);
           setWeightUnit(wUnit);
-          if (data.height_cm) {
-            const c = cmToFtIn(data.height_cm);
+          if (merged.height_cm) {
+            const c = cmToFtIn(merged.height_cm);
             setFtIn({ ft: String(c.ft), in: String(c.in) });
           }
-          if (data.weight_kg) setLbsVal(String(kgToLbs(data.weight_kg)));
+          if (merged.weight_kg) setLbsVal(String(kgToLbs(merged.weight_kg)));
           savedSnapshot.current = { goals: merged, weightUnit: wUnit, heightUnit: hUnit };
         }
         setLoading(false);
@@ -249,7 +257,7 @@ export default function Profile() {
       [key]: val === "" ? null : isNaN(Number(val)) ? val : Number(val),
     }));
     if (MACRO_VALUE_KEYS.has(key)) {
-      const fg = goals.fitness_goals ?? ["maintain"];
+      const fg = goals.body_composition_goals ?? ["maintain"];
       if (fg.some((g) => ["lose_weight", "lose_fat"].includes(g)))
         setDeficitSeverity("custom");
       else if (fg.some((g) => ["gain_muscle", "gain_weight"].includes(g)))
@@ -313,25 +321,40 @@ export default function Profile() {
         nextWeighInDate = null;
       }
     }
-    const { date_of_birth, gender, height_cm, weight_kg, preferred_weight_unit, preferred_height_unit, ...nutritionGoalsFields } = goals;
     await Promise.all([
       supabase.from("nutrition_goals").upsert(
         {
           user_id: user.id,
-          ...nutritionGoalsFields,
-          next_weigh_in_date: nextWeighInDate,
-          age: computedAge || goals.age,
-          fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
+          macros: packMacros(goals),
+          body_composition_goals: goals.body_composition_goals,
+          activity_level: goals.activity_level,
+          experience_level: goals.experience_level,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" },
       ),
       supabase.from("user_info").upsert(
-        { user_id: user.id, date_of_birth, gender, height_cm, weight_kg },
+        {
+          user_id: user.id,
+          date_of_birth: goals.date_of_birth,
+          gender: goals.gender,
+          height_cm: goals.height_cm,
+          weight_kg: goals.weight_kg,
+          starting_weight_kg: goals.starting_weight_kg,
+          target_weight_kg: goals.target_weight_kg,
+          next_weigh_in_date: nextWeighInDate,
+        },
         { onConflict: "user_id" },
       ),
       supabase.from("user_preferences").upsert(
-        { user_id: user.id, preferred_weight_unit: weightUnit, preferred_height_unit: heightUnit },
+        {
+          user_id: user.id,
+          preferred_weight_unit: weightUnit,
+          preferred_height_unit: heightUnit,
+          weight_decimal_places: goals.weight_decimal_places,
+          hide_weight_prompt: goals.hide_weight_prompt,
+          weigh_in_frequency: goals.weigh_in_frequency,
+        },
         { onConflict: "user_id" },
       ),
     ]);
@@ -365,23 +388,16 @@ export default function Profile() {
         { user_id: user.id, date: dateStr, weight_kg: kg },
         { onConflict: "user_id,date" },
       ),
-      supabase.from("nutrition_goals").upsert(
+      supabase.from("user_info").upsert(
         {
           user_id: user.id,
+          weight_kg: kg,
           next_weigh_in_date: nextDate,
           ...(isReplacingStart ? { starting_weight_kg: kg } : {}),
         },
         { onConflict: "user_id" },
       ),
     ];
-    if (isReplacingStart) {
-      ops.push(
-        supabase.from("user_info").upsert(
-          { user_id: user.id, weight_kg: kg },
-          { onConflict: "user_id" },
-        ),
-      );
-    }
     setGoals(g => ({
       ...g,
       next_weigh_in_date: nextDate,
@@ -415,7 +431,7 @@ export default function Profile() {
     );
   }
 
-  const fitnessGoals = goals.fitness_goals ?? ["maintain"];
+  const fitnessGoals = goals.body_composition_goals ?? ["maintain"];
   const isLoss = fitnessGoals.some((g) =>
     ["lose_weight", "lose_fat"].includes(g),
   );
@@ -671,7 +687,7 @@ export default function Profile() {
                   <button
                     type="button"
                     onClick={async () => {
-                      await supabase.from("nutrition_goals").upsert({ user_id: user.id, hide_weight_prompt: false }, { onConflict: "user_id" });
+                      await supabase.from("user_preferences").upsert({ user_id: user.id, hide_weight_prompt: false }, { onConflict: "user_id" });
                       setGoals(g => ({ ...g, hide_weight_prompt: false }));
                     }}
                     style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}
@@ -836,8 +852,8 @@ export default function Profile() {
                         onClick={() =>
                           setGoals((prev) => ({
                             ...prev,
-                            fitness_goals: applyGoalToggle(
-                              prev.fitness_goals ?? ["maintain"],
+                            body_composition_goals: applyGoalToggle(
+                              prev.body_composition_goals ?? ["maintain"],
                               g.value,
                             ),
                           }))
