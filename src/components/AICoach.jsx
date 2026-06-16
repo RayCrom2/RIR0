@@ -137,16 +137,21 @@ export default function AICoach({ open, onClose, goals, userId }) {
               ) : (
                 loggedDays.map((day) => {
                   const excluded = excludedDates.has(day.date);
+                  const goalCalories = goals?.calories;
+                  const offGoal = goalCalories && (day.totalCalories < 0.75 * goalCalories || day.totalCalories > 1.25 * goalCalories);
                   return (
                     <div
                       key={day.date}
                       onClick={() => toggleExclude(day.date)}
-                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 8, marginBottom: 6, background: excluded ? "#fafafa" : "#f7f7fb", border: `1px solid ${excluded ? "#e0e0e0" : "#e8e8e8"}`, cursor: "pointer", opacity: excluded ? 0.5 : 1 }}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 8, marginBottom: 6, background: excluded ? "#fafafa" : "#f7f7fb", border: `1px solid ${offGoal && !excluded ? "#e05c5c" : excluded ? "#e0e0e0" : "#e8e8e8"}`, cursor: "pointer", opacity: excluded ? 0.5 : 1 }}
                     >
                       <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${excluded ? "#ccc" : "#ff8c42"}`, background: excluded ? "#fff" : "#ff8c42", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         {!excluded && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
                       </div>
                       <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: excluded ? "#bbb" : "#333" }}>{formatDate(day.date)}</span>
+                      {offGoal && (
+                        <span title="Is this information correct?" style={{ fontSize: 14, cursor: "help" }}>⚠️</span>
+                      )}
                       <span style={{ fontSize: 13, color: excluded ? "#bbb" : "#ff8c42", fontWeight: 600 }}>{day.totalCalories} kcal</span>
                       <span style={{ fontSize: 11, color: "#bbb" }}>{day.entries} {day.entries === 1 ? "entry" : "entries"}</span>
                     </div>

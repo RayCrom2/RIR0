@@ -13,7 +13,8 @@ import UsdaNutrientCard from "../components/UsdaNutrientCard";
 import NutrientCompare from "../components/NutrientCompare";
 import NutritionCalendar from "../components/NutritionCalendar";
 import AICoach from "../components/AICoach";
-import { checkCoachThreshold } from "../lib/aiCoachData";
+import AICoachPrompt from "../components/AICoachPrompt";
+import { checkCoachStatus } from "../lib/aiCoachData";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -412,6 +413,7 @@ export default function Nutrition() {
   const WEIGHT_DISMISS_KEY = "rir0_weight_dismissed";
   const COACH_BANNER_KEY = "rir0_coach_banner_dismissed";
   const [coachAvailable, setCoachAvailable] = useState(false);
+  const [coachOnTrack, setCoachOnTrack] = useState(null);
   const [coachBannerDismissed, setCoachBannerDismissed] = useState(
     () => localStorage.getItem("rir0_coach_banner_dismissed") === "true",
   );
@@ -666,8 +668,11 @@ export default function Nutrition() {
   // ── check AI coach eligibility
   useEffect(() => {
     if (!user || loading) return;
-    checkCoachThreshold(user.id).then(setCoachAvailable);
-  }, [user, loading]);
+    checkCoachStatus(user.id, goals).then(({ eligible, onTrack }) => {
+      setCoachAvailable(eligible);
+      setCoachOnTrack(onTrack);
+    });
+  }, [user, loading, goals]);
 
   async function saveMacroPrefs(visible) {
     if (!user) {
@@ -1677,31 +1682,17 @@ export default function Nutrition() {
         </div>
       )}
 
-      {/* AI Coach banner */}
-      {user && coachAvailable && !coachBannerDismissed && (
-        <div style={{ background: "#fff8f0", border: "1px solid #ffd8a8", borderRadius: 8, padding: "10px 16px", marginBottom: 20, fontSize: 13, color: "#a05a00", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ flex: 1 }}>
-            You have 2+ weeks of weigh-in data — your AI Coach is ready to help!
-          </span>
-          <button
-            onClick={() => {
-              setAICoachOpen(true);
-          
-            }}
-            style={{ background: "#ff8c42", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}
-          >
-            Start
-          </button>
-          <button
-            onClick={() => {
-              setCoachBannerDismissed(true);
-              localStorage.setItem(COACH_BANNER_KEY, "true");
-              showToast("AI Coach is always available in your Profile", "#888");
-            }}
-            style={{ background: "none", border: "none", color: "#bbb", fontSize: 18, cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}
-          >✕</button>
-        </div>
-      )}
+      {/* AI Coach prompt */}
+      <AICoachPrompt
+        open={Boolean(user && coachAvailable && !coachBannerDismissed && !aiCoachOpen)}
+        onTrack={coachOnTrack}
+        onStart={() => setAICoachOpen(true)}
+        onDismiss={() => {
+          setCoachBannerDismissed(true);
+          localStorage.setItem(COACH_BANNER_KEY, "true");
+          showToast("AI Coach is always available in your Profile", "#888");
+        }}
+      />
 
       {/* Daily Progress Bars */}
       <div

@@ -8,12 +8,14 @@ function dateStr(offset = 0) {
 
 export async function fetchLoggedDaySummaries(userId) {
   const since = dateStr(-14);
+  const today = dateStr(0);
   const { data } = await supabase
     .from("nutrition_logs")
     .select("logged_at, calories")
     .eq("user_id", userId)
     .eq("is_planned", false)
     .gte("logged_at", since)
+    .lt("logged_at", today)
     .order("logged_at");
 
   if (!data) return [];
@@ -31,6 +33,7 @@ export async function fetchLoggedDaySummaries(userId) {
 export async function gatherCoachData(userId, goals, excludedDates = []) {
   const since = dateStr(-14);
   const weightSince = dateStr(-21);
+  const today = dateStr(0);
   const excludedSet = new Set(excludedDates);
 
   const [weightResult, nutritionResult, statusResult] = await Promise.all([
@@ -46,12 +49,14 @@ export async function gatherCoachData(userId, goals, excludedDates = []) {
       .eq("user_id", userId)
       .eq("is_planned", false)
       .gte("logged_at", since)
+      .lt("logged_at", today)
       .order("logged_at"),
     supabase
       .from("daily_goal_status")
       .select("date, met")
       .eq("user_id", userId)
-      .gte("date", since),
+      .gte("date", since)
+      .lt("date", today),
   ]);
 
   const weightLogs = weightResult.data || [];
@@ -137,13 +142,36 @@ export async function gatherCoachData(userId, goals, excludedDates = []) {
   };
 }
 
-export async function checkCoachThreshold(userId) {
+export async function checkCoachStatus(userId, goals) {
   const since = dateStr(-14);
   const { data } = await supabase
     .from("weight_logs")
-    .select("date")
+    .select("date, weight_kg")
     .eq("user_id", userId)
-    .gte("date", since);
+    .order("date", { ascending: true });
 
-  return (data || []).length >= 3;
+  const logs = data || [];
+  const eligible = logs.filter((l) => l.date >= since).length >= 3;
+  if (!eligible) return { eligible: false, onTrack: null };
+
+  const latestKg = logs.at(-1)?.weight_kg ?? null;
+  const startKg = Number(goals?.starting_weight_kg) || logs[0]?.weight_kg || null;
+  if (latestKg == null || startKg == null) return { eligible: true, onTrack: null };
+
+  const fitnessGoals = goals?.fitness_goals ?? [];
+  const isLoss = fitnessGoals.some((g) => ["lose_weight", "lose_fat"].includes(g));
+  const isGain = fitnessGoals.some((g) => ["gain_muscle", "gain_weight"].includes(g));
+  const moved = startKg - latestKg;
+
+  let onTrack;
+  if (isLoss) {
+    onTrack = moved > 0.05;
+  } else if (isGain) {
+    onTrack = moved < -0.05;
+  } else {
+    const targetKg = Number(goals?.target_weight_kg) || startKg;
+    onTrack = Math.abs(latestKg - targetKg) <= 1;
+  }
+
+  return { eligible: true, onTrack };
 }
