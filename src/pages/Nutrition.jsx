@@ -650,7 +650,7 @@ export default function Nutrition() {
     if (!user) return;
     supabase
       .from("user_preferences")
-      .select("nutrition_visible_macros")
+      .select("nutrition_visible_macros, preferred_weight_unit, preferred_height_unit")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -662,6 +662,11 @@ export default function Nutrition() {
             JSON.stringify(data.nutrition_visible_macros),
           );
         }
+        setGoals((g) => ({
+          ...g,
+          preferred_weight_unit: data.preferred_weight_unit ?? g.preferred_weight_unit,
+          preferred_height_unit: data.preferred_height_unit ?? g.preferred_height_unit,
+        }));
       });
   }, [user]);
 
@@ -1334,10 +1339,13 @@ export default function Nutrition() {
           { user_id: user.id, date: todayStr(), weight_kg: kg },
           { onConflict: "user_id,date" },
         ),
+      supabase.from("user_info").upsert(
+        { user_id: user.id, weight_kg: kg },
+        { onConflict: "user_id" },
+      ),
       supabase.from("nutrition_goals").upsert(
         {
           user_id: user.id,
-          weight_kg: kg,
           next_weigh_in_date: nextWeighInDate,
         },
         { onConflict: "user_id" },

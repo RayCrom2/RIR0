@@ -148,7 +148,7 @@ const DEFAULT_GOALS = {
   sugar_dir: "below",
   gender: "male",
   age: "",
-  birth_date: "",
+  date_of_birth: "",
   height_cm: "",
   weight_kg: "",
   starting_weight_kg: "",
@@ -195,12 +195,13 @@ export default function Profile() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("nutrition_goals")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
+    Promise.all([
+      supabase.from("nutrition_goals").select("*").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_info").select("*").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_preferences").select("preferred_weight_unit, preferred_height_unit").eq("user_id", user.id).maybeSingle(),
+    ])
+      .then(([{ data: ng }, { data: info }, { data: prefs }]) => {
+        const data = ng || info || prefs ? { ...ng, ...info, ...prefs } : null;
         if (data) {
           const merged = { ...DEFAULT_GOALS, ...data };
           // Backwards compat: derive fitness_goals from fitness_goal if not set
@@ -313,18 +314,28 @@ export default function Profile() {
         nextWeighInDate = null;
       }
     }
-    await supabase.from("nutrition_goals").upsert(
-      {
-        user_id: user.id,
-        ...goals,
-        next_weigh_in_date: nextWeighInDate,
-        age: computedAge || goals.age,
-        fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
-        preferred_weight_unit: weightUnit,
-        preferred_height_unit: heightUnit,
-      },
-      { onConflict: "user_id" },
-    );
+    const { date_of_birth, gender, height_cm, weight_kg, preferred_weight_unit, preferred_height_unit, ...nutritionGoalsFields } = goals;
+    await Promise.all([
+      supabase.from("nutrition_goals").upsert(
+        {
+          user_id: user.id,
+          ...nutritionGoalsFields,
+          next_weigh_in_date: nextWeighInDate,
+          age: computedAge || goals.age,
+          fitness_goal: goals.fitness_goals?.[0] ?? "maintain",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      ),
+      supabase.from("user_info").upsert(
+        { user_id: user.id, date_of_birth, gender, height_cm, weight_kg },
+        { onConflict: "user_id" },
+      ),
+      supabase.from("user_preferences").upsert(
+        { user_id: user.id, preferred_weight_unit: weightUnit, preferred_height_unit: heightUnit },
+        { onConflict: "user_id" },
+      ),
+    ]);
     setGoals(g => ({ ...g, next_weigh_in_date: nextWeighInDate }));
     setSaving(false);
     setSaved(true);
@@ -445,7 +456,7 @@ export default function Profile() {
   })();
 
   // Compute TDEE for display in suggestion card
-  const computedAge = getAge(goals.birth_date) ?? Number(goals.age);
+  const computedAge = getAge(goals.date_of_birth) ?? Number(goals.age);
   const hasProfileData = goals.weight_kg && goals.height_cm && computedAge;
   let tdeeDisplay = null;
   if (hasProfileData) {
@@ -496,12 +507,12 @@ export default function Profile() {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Age</span>
-                {goals.birth_date ? (
-                  <span style={{ fontSize: 14, color: "#555" }}>{getAge(goals.birth_date)}</span>
+                {goals.date_of_birth ? (
+                  <span style={{ fontSize: 14, color: "#555" }}>{getAge(goals.date_of_birth)}</span>
                 ) : (
                   <BirthDateInput
-                    value={goals.birth_date ?? ""}
-                    onChange={(v) => setGStr("birth_date", v)}
+                    value={goals.date_of_birth ?? ""}
+                    onChange={(v) => setGStr("date_of_birth", v)}
                     style={{ ...numInput, width: "auto", textAlign: "left" }}
                   />
                 )}

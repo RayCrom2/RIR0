@@ -296,7 +296,7 @@ export default function ExerciseLogger() {
       .order("created_at")
       .then(({ data }) => setRoutines(data || []));
     supabase
-      .from("nutrition_goals")
+      .from("user_preferences")
       .select("preferred_weight_unit")
       .eq("user_id", user.id)
       .maybeSingle()
