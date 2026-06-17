@@ -432,7 +432,6 @@ function AppShell() {
       <nav className="top-nav">
         <NavLink to="/nutrition">Nutrition</NavLink>
         <NavLink to="/exerciselogger">Exercise Logger</NavLink>
-        <NavLink to="/diagram">Muscle Diagram</NavLink>
         <NavAuth />
       </nav>
 

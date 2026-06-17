@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import confetti from "canvas-confetti";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PwaSheet } from "../App";
@@ -179,7 +180,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [weighInOpen, setWeighInOpen] = useState(false);
   const [weighInValue, setWeighInValue] = useState("");
-  const [goalWeightEditing, setGoalWeightEditing] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [unitPrefsOpen, setUnitPrefsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -189,6 +190,8 @@ export default function Profile() {
   const [deficitSeverity, setDeficitSeverity] = useState("moderate");
   const [surplusSeverity, setSurplusSeverity] = useState("moderate");
   const [weightLogs, setWeightLogs] = useState([]);
+  const [userGoals, setUserGoals] = useState([]);
+  const [selectedGoalId, setSelectedGoalId] = useState("active");
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const displayName = user?.user_metadata?.full_name || user?.email || "";
@@ -246,9 +249,13 @@ export default function Profile() {
       .select("date, weight_kg")
       .eq("user_id", user.id)
       .order("date")
-      .then(({ data }) => {
-        if (data) setWeightLogs(data);
-      });
+      .then(({ data }) => { if (data) setWeightLogs(data); });
+    supabase
+      .from("user_goals")
+      .select("id, goal_number, is_active, start_date, end_date, starting_weight_kg, target_weight_kg")
+      .eq("user_id", user.id)
+      .order("goal_number")
+      .then(({ data }) => { if (data) setUserGoals(data); });
   }, [user]);
 
   function setG(key, val) {
@@ -412,6 +419,18 @@ export default function Profile() {
         a.date.localeCompare(b.date),
       );
     });
+
+    const targetKg = Number(goals.target_weight_kg);
+    const prevKg = todayLog ? todayLog.weight_kg : (weightLogs.at(-1)?.weight_kg ?? null);
+    if (targetKg && prevKg != null) {
+      const hitGoal =
+        (kg <= targetKg && prevKg > targetKg) ||
+        (kg >= targetKg && prevKg < targetKg);
+      if (hitGoal) {
+        confetti({ particleCount: 180, spread: 90, origin: { y: 0.6 } });
+      }
+    }
+
     setWeighInOpen(false);
     setWeighInValue("");
   }
@@ -439,6 +458,21 @@ export default function Profile() {
     ["gain_muscle", "gain_weight"].includes(g),
   );
 
+  const activeGoal = userGoals.find(g => g.is_active) ?? null;
+  const selectedGoal = selectedGoalId === "active" || selectedGoalId === "all"
+    ? activeGoal
+    : (userGoals.find(g => g.id === selectedGoalId) ?? activeGoal);
+  const graphLogs = selectedGoalId === "all"
+    ? weightLogs
+    : weightLogs.filter(l =>
+        selectedGoal
+          ? l.date >= selectedGoal.start_date &&
+            (selectedGoal.end_date == null || l.date <= selectedGoal.end_date)
+          : true,
+      );
+  const graphStartKg = selectedGoalId === "all" ? null : (Number(selectedGoal?.starting_weight_kg) || null);
+  const graphTargetKg = selectedGoalId === "all" ? null : (Number(selectedGoal?.target_weight_kg) || null);
+
   const hasChanges = !savedSnapshot.current ||
     JSON.stringify(goals) !== JSON.stringify(savedSnapshot.current.goals) ||
     weightUnit !== savedSnapshot.current.weightUnit ||
@@ -450,6 +484,13 @@ export default function Profile() {
     weightLogs.length > 0
       ? weightLogs[weightLogs.length - 1].weight_kg
       : goals.weight_kg || null;
+  const goalAchieved = (() => {
+    const s = Number(activeGoal?.starting_weight_kg) || null;
+    const t = Number(activeGoal?.target_weight_kg) || null;
+    const c = latestWeightKg;
+    if (!s || !t || !c) return false;
+    return (s > t && c <= t) || (s < t && c >= t);
+  })();
   const latestWeighInDate =
     weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].date : null;
   const shouldShowWeighIn = !goals.next_weigh_in_date || todayDateStr >= goals.next_weigh_in_date;
@@ -746,58 +787,16 @@ export default function Profile() {
                   </div>
                 </div>
               )}
-              {(isLoss || isGain) && (
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>
-                    Goal weight
-                  </span>
-                  {goalWeightEditing ? (
-                    <>
-                      {weightUnit === "kg" ? (
-                        <input
-                          type="number"
-                          min="30"
-                          max="300"
-                          step="0.1"
-                          value={goals.target_weight_kg ?? ""}
-                          onChange={(e) => setGStr("target_weight_kg", e.target.value === "" ? "" : Number(e.target.value))}
-                          onFocus={(e) => e.target.select()}
-                          autoFocus
-                          style={{ ...numInput, padding: "7px 6px" }}
-                        />
-                      ) : (
-                        <input
-                          type="number"
-                          min="66"
-                          max="660"
-                          value={goals.target_weight_kg ? Math.round(Number(goals.target_weight_kg) * 2.20462) : ""}
-                          onChange={(e) => setGStr("target_weight_kg", e.target.value === "" ? "" : lbsToKg(e.target.value))}
-                          onFocus={(e) => e.target.select()}
-                          autoFocus
-                          style={{ ...numInput, padding: "7px 6px" }}
-                        />
-                      )}
-                      <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
-                      <button type="button" onClick={() => setGoalWeightEditing(false)}
-                        style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}>
-                        Done
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontSize: 14, color: goals.target_weight_kg ? "#555" : "#ccc" }}>
-                        {goals.target_weight_kg
-                          ? `${dispWeight(Number(goals.target_weight_kg), weightUnit, goals.weight_decimal_places || 1)} ${weightUnit}`
-                          : "—"}
-                      </span>
-                      <button type="button" onClick={() => setGoalWeightEditing(true)}
-                        style={{ fontSize: 12, color: "#ff8c42", background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "4px 2px" }}>
-                        Edit
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Weight Logs</span>
+                <button
+                  type="button"
+                  onClick={() => setManageOpen(true)}
+                  style={{ fontSize: 12, color: "#ff8c42", background: "#fff5ee", border: "1px solid #ff8c42", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  {goalAchieved ? "Start New Goal" : "Manage"}
+                </button>
+              </div>
             </div>
           </Section>
 
@@ -806,20 +805,29 @@ export default function Profile() {
             <Section
               title="Weight Progress"
               action={
-                <button
-                  type="button"
-                  onClick={() => setGraphModalOpen(true)}
-                  title="Expand graph"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}
-                >
-                  ⤢
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {userGoals.length > 0 && (
+                    <GoalFilter
+                      goals={userGoals}
+                      selected={selectedGoalId}
+                      onSelect={setSelectedGoalId}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setGraphModalOpen(true)}
+                    title="Expand graph"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: 18, lineHeight: 1, padding: "2px 4px" }}
+                  >
+                    ⤢
+                  </button>
+                </div>
               }
             >
               <WeightGraph
-                logs={weightLogs}
-                startKg={Number(goals.starting_weight_kg) || null}
-                targetKg={Number(goals.target_weight_kg) || null}
+                logs={graphLogs}
+                startKg={graphStartKg}
+                targetKg={graphTargetKg}
                 unit={weightUnit}
                 isLoss={isLoss}
                 isGain={isGain}
@@ -1283,7 +1291,7 @@ export default function Profile() {
             onClick={(e) => e.stopPropagation()}
             style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 760, boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }}
           >
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>Weight Progress</h3>
               <button
                 type="button"
@@ -1293,10 +1301,17 @@ export default function Profile() {
                 ✕
               </button>
             </div>
+            {userGoals.length > 0 && (
+              <GoalFilter
+                goals={userGoals}
+                selected={selectedGoalId}
+                onSelect={setSelectedGoalId}
+              />
+            )}
             <WeightGraph
-              logs={weightLogs}
-              startKg={Number(goals.starting_weight_kg) || null}
-              targetKg={Number(goals.target_weight_kg) || null}
+              logs={graphLogs}
+              startKg={graphStartKg}
+              targetKg={graphTargetKg}
               unit={weightUnit}
               isLoss={isLoss}
               isGain={isGain}
@@ -1372,6 +1387,21 @@ export default function Profile() {
         onClose={() => setAICoachOpen(false)}
         goals={goals}
         userId={user?.id}
+      />
+
+      <ManageWeightsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        initialTab={goalAchieved ? "new_goal" : "logs"}
+        user={user}
+        weightLogs={weightLogs}
+        setWeightLogs={setWeightLogs}
+        userGoals={userGoals}
+        setUserGoals={setUserGoals}
+        activeGoal={activeGoal}
+        weightUnit={weightUnit}
+        decimalPlaces={goals.weight_decimal_places || 1}
+        setGoals={setGoals}
       />
 
       {weighInOpen && (
@@ -1572,9 +1602,20 @@ function WeightGraph({ logs, startKg, targetKg, unit, isLoss, isGain, decimalPla
             : "No change yet";
     }
     if (targetKg && progressMsg && progressMsg !== "No change yet") {
-      const rem = Math.abs(latest - targetKg);
-      if (rem > 0.05) progressMsg += ` · ${toDisp(rem)} ${unitLabel} to go`;
-      else progressMsg += " · Goal reached! 🎉";
+      const latestDisp = parseFloat(toDisp(latest));
+      const targetDisp = parseFloat(toDisp(targetKg));
+      const diff = latestDisp - targetDisp; // positive = above target
+      const absDiff = Math.abs(diff);
+      const threshold = 0.5 * Math.pow(10, -decimalPlaces);
+      if (absDiff <= threshold) {
+        progressMsg += " · Goal reached! 🎉";
+      } else if (isLoss && diff < 0) {
+        progressMsg += ` · ${absDiff.toFixed(decimalPlaces)} ${unitLabel} below goal 🎉`;
+      } else if (isGain && diff > 0) {
+        progressMsg += ` · ${absDiff.toFixed(decimalPlaces)} ${unitLabel} above goal 🎉`;
+      } else {
+        progressMsg += ` · ${absDiff.toFixed(decimalPlaces)} ${unitLabel} to go`;
+      }
     }
   }
 
@@ -1878,3 +1919,323 @@ const chipBtn = {
   display: "flex",
   alignItems: "center",
 };
+
+function ManageWeightsModal({ open, onClose, initialTab = "logs", user, weightLogs, setWeightLogs, userGoals, setUserGoals, activeGoal, weightUnit, decimalPlaces, setGoals }) {
+  const [tab, setTab] = useState("logs");
+  const [editingDate, setEditingDate] = useState(null);
+  const [editWeight, setEditWeight] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editingStart, setEditingStart] = useState(false);
+  const [startVal, setStartVal] = useState("");
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetVal, setTargetVal] = useState("");
+  const [newStartVal, setNewStartVal] = useState("");
+  const [newTargetVal, setNewTargetVal] = useState("");
+  const [logFilter, setLogFilter] = useState("active");
+  useEffect(() => {
+    if (!open) return;
+    setTab(initialTab);
+    const lastLog = weightLogs[weightLogs.length - 1];
+    if (lastLog) setNewStartVal(String(dispWeight(lastLog.weight_kg, weightUnit, decimalPlaces)));
+  }, [open]);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+  if (!open) return null;
+
+  const sortedGoals = [...userGoals].sort((a, b) => b.goal_number - a.goal_number);
+  const filterGoal = logFilter === "all" ? null : logFilter === "active" ? activeGoal : userGoals.find(g => g.id === logFilter);
+  const displayLogs = [...weightLogs]
+    .filter(l => {
+      if (!filterGoal) return true;
+      return l.date >= filterGoal.start_date && (filterGoal.end_date == null || l.date <= filterGoal.end_date);
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  function dispW(kg) { return dispWeight(kg, weightUnit, decimalPlaces); }
+  function toKg(val) { return weightUnit === "lbs" ? lbsToKg(val) : Number(val); }
+
+  function startEdit(log) {
+    setEditingDate(log.date);
+    setEditDate(log.date);
+    setEditWeight(dispW(log.weight_kg));
+  }
+
+  async function saveEdit(originalDate) {
+    const kg = toKg(editWeight);
+    if (!kg) return;
+    setSaving(true);
+    if (editDate !== originalDate) {
+      await supabase.from("weight_logs").delete().eq("user_id", user.id).eq("date", originalDate);
+    }
+    await supabase.from("weight_logs").upsert({ user_id: user.id, date: editDate, weight_kg: kg }, { onConflict: "user_id,date" });
+    setWeightLogs(prev => {
+      const without = prev.filter(l => l.date !== originalDate && l.date !== editDate);
+      return [...without, { date: editDate, weight_kg: kg }].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    setEditingDate(null);
+    setSaving(false);
+  }
+
+  async function deleteLog(date) {
+    await supabase.from("weight_logs").delete().eq("user_id", user.id).eq("date", date);
+    setWeightLogs(prev => prev.filter(l => l.date !== date));
+  }
+
+  async function saveStartKg() {
+    const kg = toKg(startVal);
+    if (!kg || !activeGoal) return;
+    await Promise.all([
+      supabase.from("user_goals").update({ starting_weight_kg: kg }).eq("id", activeGoal.id),
+      supabase.from("user_info").upsert({ user_id: user.id, starting_weight_kg: kg }, { onConflict: "user_id" }),
+    ]);
+    setUserGoals(prev => prev.map(g => g.id === activeGoal.id ? { ...g, starting_weight_kg: kg } : g));
+    setGoals(g => ({ ...g, starting_weight_kg: kg }));
+    setEditingStart(false);
+  }
+
+  async function saveTargetKg() {
+    const kg = targetVal ? toKg(targetVal) : null;
+    if (!activeGoal) return;
+    await Promise.all([
+      supabase.from("user_goals").update({ target_weight_kg: kg }).eq("id", activeGoal.id),
+      supabase.from("user_info").upsert({ user_id: user.id, target_weight_kg: kg }, { onConflict: "user_id" }),
+    ]);
+    setUserGoals(prev => prev.map(g => g.id === activeGoal.id ? { ...g, target_weight_kg: kg } : g));
+    setGoals(g => ({ ...g, target_weight_kg: kg }));
+    setEditingTarget(false);
+  }
+
+  async function createNewGoal() {
+    const startKg = toKg(newStartVal);
+    if (!startKg) return;
+    const targetKg = newTargetVal ? toKg(newTargetVal) : null;
+    setSaving(true);
+    if (activeGoal) {
+      await supabase.from("user_goals").update({ is_active: false, end_date: todayStr }).eq("id", activeGoal.id);
+    }
+    const maxNum = Math.max(...userGoals.map(g => g.goal_number), 0);
+    const { data: newGoal } = await supabase.from("user_goals").insert({
+      user_id: user.id,
+      goal_number: maxNum + 1,
+      is_active: true,
+      start_date: todayStr,
+      starting_weight_kg: startKg,
+      target_weight_kg: targetKg,
+    }).select().single();
+    setUserGoals(prev => [
+      ...prev.map(g => g.id === activeGoal?.id ? { ...g, is_active: false, end_date: todayStr } : g),
+      newGoal,
+    ]);
+    setGoals(g => ({ ...g, starting_weight_kg: startKg, target_weight_kg: targetKg }));
+    setSaving(false);
+    onClose();
+  }
+
+  async function deleteGoal() {
+    if (!activeGoal) return;
+    setSaving(true);
+    await supabase.from("user_goals").delete().eq("id", activeGoal.id);
+    const remaining = userGoals.filter(g => g.id !== activeGoal.id);
+    if (remaining.length > 0) {
+      const prev = remaining[remaining.length - 1];
+      await supabase.from("user_goals").update({ is_active: true, end_date: null }).eq("id", prev.id);
+      setUserGoals([...remaining.slice(0, -1), { ...prev, is_active: true, end_date: null }]);
+    } else {
+      setUserGoals([]);
+    }
+    setSaving(false);
+    onClose();
+  }
+
+  const inlineBtn = { fontSize: 12, background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: "2px 4px" };
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, zIndex: 700, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+    >
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,0.2)" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", padding: "20px 24px 0", flexShrink: 0 }}>
+          <span style={{ flex: 1, fontWeight: 700, fontSize: 16, color: "#333" }}>Weight Logs & Goals</span>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#aaa", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", padding: "12px 24px 0", flexShrink: 0, borderBottom: "1px solid #f0f0f0" }}>
+          {[["logs", "Manage Logs"], ["new_goal", "New Goal"]].map(([t, label]) => (
+            <button key={t} type="button" onClick={() => setTab(t)} style={{ background: "none", border: "none", borderBottom: tab === t ? "2px solid #ff8c42" : "2px solid transparent", padding: "8px 16px 10px", fontSize: 13, fontWeight: tab === t ? 700 : 400, color: tab === t ? "#ff8c42" : "#888", cursor: "pointer" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Scrollable content */}
+        <div style={{ overflowY: "auto", padding: "20px 24px", flex: 1, display: "flex", flexDirection: "column", gap: 20 }}>
+          {tab === "logs" && (
+            <>
+              {/* Starting & target weight */}
+              <div>
+                <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.6px" }}>Current Goal</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ flex: 1, fontSize: 13, color: "#555" }}>Starting weight</span>
+                  {editingStart ? (
+                    <>
+                      <input type="number" step="0.1" value={startVal} onChange={e => setStartVal(e.target.value)} autoFocus style={{ ...numInput, width: 76 }} />
+                      <span style={{ fontSize: 12, color: "#aaa" }}>{weightUnit}</span>
+                      <button type="button" onClick={saveStartKg} style={{ ...inlineBtn, color: "#ff8c42" }}>Save</button>
+                      <button type="button" onClick={() => setEditingStart(false)} style={{ ...inlineBtn, color: "#aaa" }}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 14, color: "#333" }}>{activeGoal?.starting_weight_kg ? `${dispW(activeGoal.starting_weight_kg)} ${weightUnit}` : "—"}</span>
+                      <button type="button" onClick={() => { setStartVal(activeGoal?.starting_weight_kg ? String(dispW(activeGoal.starting_weight_kg)) : ""); setEditingStart(true); }} style={{ ...inlineBtn, color: "#ff8c42" }}>Edit</button>
+                    </>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 13, color: "#555" }}>Target weight</span>
+                  {editingTarget ? (
+                    <>
+                      <input type="number" step="0.1" value={targetVal} onChange={e => setTargetVal(e.target.value)} autoFocus style={{ ...numInput, width: 76 }} />
+                      <span style={{ fontSize: 12, color: "#aaa" }}>{weightUnit}</span>
+                      <button type="button" onClick={saveTargetKg} style={{ ...inlineBtn, color: "#ff8c42" }}>Save</button>
+                      <button type="button" onClick={() => setEditingTarget(false)} style={{ ...inlineBtn, color: "#aaa" }}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 14, color: "#333" }}>{activeGoal?.target_weight_kg ? `${dispW(activeGoal.target_weight_kg)} ${weightUnit}` : "—"}</span>
+                      <button type="button" onClick={() => { setTargetVal(activeGoal?.target_weight_kg ? String(dispW(activeGoal.target_weight_kg)) : ""); setEditingTarget(true); }} style={{ ...inlineBtn, color: "#ff8c42" }}>Edit</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Weigh-in list */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.6px" }}>Weigh-ins</p>
+                  <select
+                    value={logFilter}
+                    onChange={e => setLogFilter(e.target.value)}
+                    style={{ marginLeft: "auto", fontSize: 12, padding: "4px 7px", border: "1px solid #e0e0e0", borderRadius: 7, background: "#fff", color: "#333", cursor: "pointer", outline: "none" }}
+                  >
+                    <option value="active">Current goal</option>
+                    <option value="all">All time</option>
+                    {sortedGoals.filter(g => !g.is_active).map(g => (
+                      <option key={g.id} value={g.id}>Goal {g.goal_number}</option>
+                    ))}
+                  </select>
+                </div>
+                {displayLogs.length === 0 && <p style={{ fontSize: 13, color: "#bbb", textAlign: "center", margin: 0 }}>No weigh-ins for this goal.</p>}
+                {displayLogs.map(log => (
+                  <div key={log.date} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", borderBottom: "1px solid #f5f5f5" }}>
+                    {editingDate === log.date ? (
+                      <>
+                        <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: "4px 6px", fontSize: 12, flex: 1, minWidth: 0 }} />
+                        <input type="number" step="0.1" value={editWeight} onChange={e => setEditWeight(e.target.value)} style={{ ...numInput, width: 72, padding: "5px 6px", fontSize: 13 }} />
+                        <span style={{ fontSize: 11, color: "#aaa" }}>{weightUnit}</span>
+                        <button type="button" onClick={() => saveEdit(log.date)} style={{ ...inlineBtn, color: "#ff8c42" }}>Save</button>
+                        <button type="button" onClick={() => setEditingDate(null)} style={{ ...inlineBtn, color: "#aaa" }}>✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ flex: 1, fontSize: 13, color: "#555" }}>
+                          {new Date(log.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#333" }}>{dispW(log.weight_kg)} {weightUnit}</span>
+                        <button type="button" onClick={() => startEdit(log)} style={{ ...inlineBtn, color: "#888" }}>Edit</button>
+                        <button type="button" onClick={() => deleteLog(log.date)} style={{ ...inlineBtn, color: "#e05c5c" }}>Delete</button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Delete goal */}
+              <div style={{ paddingTop: 4, borderTop: "1px solid #f0f0f0" }}>
+                {deleteConfirm ? (
+                  <div style={{ background: "#fff5f5", border: "1px solid #f5c2c2", borderRadius: 8, padding: "12px 14px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 13, color: "#c0392b" }}>Delete this goal? Your weigh-in history is not affected.</p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={deleteGoal} disabled={saving} style={{ flex: 1, background: "#e05c5c", color: "#fff", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Yes, delete</button>
+                      <button type="button" onClick={() => setDeleteConfirm(false)} style={{ flex: 1, background: "#f0f0f0", color: "#555", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => setDeleteConfirm(true)} style={{ background: "none", border: "none", color: "#e05c5c", fontSize: 12, cursor: "pointer", padding: "4px 0" }}>
+                    Delete this goal
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {tab === "new_goal" && (
+            <>
+              <p style={{ margin: 0, fontSize: 13, color: "#777", lineHeight: 1.65, background: "#f7f7fb", borderRadius: 9, padding: "12px 14px" }}>
+                Starting a new goal closes the current one and begins a fresh tracking period. Your weigh-in history is preserved.
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>Starting weight</span>
+                <input type="number" step="0.1" value={newStartVal} onChange={e => setNewStartVal(e.target.value)} placeholder="—" style={{ ...numInput }} />
+                <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#333" }}>
+                  Target weight <span style={{ color: "#bbb", fontWeight: 400 }}>(optional)</span>
+                </span>
+                <input type="number" step="0.1" value={newTargetVal} onChange={e => setNewTargetVal(e.target.value)} placeholder="—" style={{ ...numInput }} />
+                <span style={{ fontSize: 12, color: "#aaa", width: 26 }}>{weightUnit}</span>
+              </div>
+              <button
+                type="button"
+                onClick={createNewGoal}
+                disabled={!newStartVal || saving}
+                style={{ width: "100%", padding: "11px 0", background: newStartVal ? "#ff8c42" : "#e0e0e0", color: newStartVal ? "#fff" : "#aaa", border: "none", borderRadius: 9, fontWeight: 700, fontSize: 14, cursor: newStartVal ? "pointer" : "default" }}
+              >
+                {saving ? "Saving…" : "Start New Goal"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalFilter({ goals, selected, onSelect }) {
+  const pastGoals = goals
+    .filter(g => !g.is_active)
+    .sort((a, b) => b.goal_number - a.goal_number);
+  const options = [
+    { id: "active", label: "Current" },
+    { id: "all", label: "All time" },
+    ...pastGoals.map(g => ({ id: g.id, label: `Goal ${g.goal_number}` })),
+  ];
+  return (
+    <select
+      value={selected}
+      onChange={e => onSelect(e.target.value)}
+      style={{
+        marginBottom: 14,
+        fontSize: 12,
+        padding: "5px 8px",
+        border: "1px solid #e0e0e0",
+        borderRadius: 7,
+        background: "#fff",
+        color: "#333",
+        cursor: "pointer",
+        outline: "none",
+      }}
+    >
+      {options.map(opt => (
+        <option key={opt.id} value={opt.id}>{opt.label}</option>
+      ))}
+    </select>
+  );
+}
