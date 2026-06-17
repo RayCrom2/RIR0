@@ -1,16 +1,16 @@
-# Task: Indicate Loading Status
+# Task: Multiple Goals and User Data self-managing
 
 ## Status: Completed
 
 ## Steps
 
-- [x] 1. Add loading placeholder for daily progress macro bars at top of nutrition page
-- [x] 2. Add loading placeholder for food library
-- [x] 3. Add loading placeholder for daily log
-- [x] 4. Repeat first three steps and add error logging that says it was unable to fetch if it does not get a response
-- [x] 5. After pressing "Skip Today" on weight-in, de-render the module first, then make the upsert that it was skipped today.
+- [x] 1. Where "Goal Weight" is on profile, replace it with a button that says "Manage Weight Logs and Goals"
+- [x] 2. Inside this button, allow users to change their starting weight, target weight, and modify/delete/add weigh-ins that exist and don't exist already
+- [x] 3. Have an alternate view that allows the user to create a new goal
+- [x] 4. Have the option for a user to delete a goal/the goal they are currently on
 
 
 
 ## Notes
+
 

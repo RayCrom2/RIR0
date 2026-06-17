@@ -26,6 +26,26 @@ const EXPERIENCE = [
   { value: "advanced",     label: "Advanced"     },
 ];
 
+export function packMacros(flat) {
+  const m = {};
+  MACRO_FIELDS.forEach(f => {
+    m[f.key] = { target: flat[f.key] ?? null, min: flat[f.minKey] ?? null, dir: flat[f.dirKey] ?? f.defaultDir };
+  });
+  return m;
+}
+
+export function unpackMacros(json) {
+  const src = json || {};
+  const out = {};
+  MACRO_FIELDS.forEach(f => {
+    const m = src[f.key] || {};
+    out[f.key]    = m.target ?? null;
+    out[f.minKey] = m.min    ?? null;
+    out[f.dirKey] = m.dir    ?? f.defaultDir;
+  });
+  return out;
+}
+
 export const GOAL_GROUPS = {
   lose:     ["lose_weight", "lose_fat"],
   maintain: ["maintain"],
@@ -67,7 +87,7 @@ export function applyGoalToggle(current, val) {
   return [...current.filter(g => getGoalGroup(g) === group), val];
 }
 
-export function calcSuggested({ gender, age, date_of_birth, height_cm, weight_kg, fitness_goals, activity_level, deficitSeverity, surplusSeverity }) {
+export function calcSuggested({ gender, age, date_of_birth, height_cm, weight_kg, body_composition_goals, activity_level, deficitSeverity, surplusSeverity }) {
   const a = date_of_birth ? getAge(date_of_birth) : Number(age);
   if (!weight_kg || !height_cm || !a) return null;
   const w = Number(weight_kg), h = Number(height_cm);
@@ -76,7 +96,7 @@ export function calcSuggested({ gender, age, date_of_birth, height_cm, weight_kg
     : 10 * w + 6.25 * h - 5 * a - 161;
   const actMult = ACTIVITY_LEVELS.find(l => l.value === activity_level)?.multiplier ?? 1.55;
   const tdee = Math.round(bmr * actMult);
-  const goals = fitness_goals ?? [];
+  const goals = body_composition_goals ?? [];
   const isLoss = goals.some(g => ["lose_weight", "lose_fat"].includes(g));
   const isGain = goals.some(g => ["gain_muscle", "gain_weight"].includes(g));
   let delta = 0;
@@ -261,7 +281,7 @@ export default function OnboardingModal() {
   const [profile, setProfile] = useState({
     gender: "male", date_of_birth: "", height_cm: "", weight_kg: "",
     experience_level: "beginner",
-    fitness_goals: ["maintain"],
+    body_composition_goals: ["maintain"],
     activity_level: "moderate",
   });
 
@@ -284,8 +304,8 @@ export default function OnboardingModal() {
 
   if (!needsOnboarding) return null;
 
-  const isLoss = profile.fitness_goals.some(g => ["lose_weight", "lose_fat"].includes(g));
-  const isGain = profile.fitness_goals.some(g => ["gain_muscle", "gain_weight"].includes(g));
+  const isLoss = profile.body_composition_goals.some(g => ["lose_weight", "lose_fat"].includes(g));
+  const isGain = profile.body_composition_goals.some(g => ["gain_muscle", "gain_weight"].includes(g));
 
   function applySuggested(overrideDeficit, overrideSurplus) {
     const calc = calcSuggested({
@@ -346,16 +366,15 @@ export default function OnboardingModal() {
       supabase.from("nutrition_goals").upsert(
         {
           user_id: user.id,
-          ...goalProfile,
-          age: getAge(date_of_birth),
-          fitness_goal: profile.fitness_goals[0] ?? "maintain",
-          starting_weight_kg: weightKg,
-          ...macros,
+          macros: packMacros(macros),
+          body_composition_goals: goalProfile.body_composition_goals,
+          activity_level: goalProfile.activity_level,
+          experience_level: goalProfile.experience_level,
         },
         { onConflict: "user_id" }
       ),
       supabase.from("user_info").upsert(
-        { user_id: user.id, gender, date_of_birth, height_cm, weight_kg },
+        { user_id: user.id, gender, date_of_birth, height_cm, weight_kg, starting_weight_kg: weightKg },
         { onConflict: "user_id" }
       ),
       supabase.from("user_preferences").upsert(
@@ -500,10 +519,10 @@ export default function OnboardingModal() {
                 <label style={labelStyle}>Fitness goal</label>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
                   {GOALS.map(g => {
-                    const selected = profile.fitness_goals.includes(g.value);
+                    const selected = profile.body_composition_goals.includes(g.value);
                     return (
                       <button key={g.value} type="button"
-                        onClick={() => setP("fitness_goals", applyGoalToggle(profile.fitness_goals, g.value))}
+                        onClick={() => setP("body_composition_goals", applyGoalToggle(profile.body_composition_goals, g.value))}
                         style={{ ...chipBtn, justifyContent: "flex-start", padding: "10px 14px", background: selected ? "#fff5ee" : "#f7f7fb", color: selected ? "#ff8c42" : "#555", border: selected ? "1.5px solid #ff8c42" : "1.5px solid transparent", fontWeight: selected ? 700 : 400 }}>
                         <span style={{ flex: 1 }}>{g.label}</span>
                         {selected && <span style={{ fontSize: 13 }}>✓</span>}
@@ -527,8 +546,8 @@ export default function OnboardingModal() {
             <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
               <button onClick={() => setStep(1)} style={{ ...secondaryBtn, flex: 1 }}>← Back</button>
               <button
-                onClick={() => profile.fitness_goals.length > 0 && setStep(3)}
-                style={{ ...primaryBtn, flex: 2, opacity: profile.fitness_goals.length > 0 ? 1 : 0.4 }}
+                onClick={() => profile.body_composition_goals.length > 0 && setStep(3)}
+                style={{ ...primaryBtn, flex: 2, opacity: profile.body_composition_goals.length > 0 ? 1 : 0.4 }}
               >Next →</button>
             </div>
           </>

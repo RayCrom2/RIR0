@@ -15,6 +15,7 @@ import NutritionCalendar from "../components/NutritionCalendar";
 import AICoach from "../components/AICoach";
 import AICoachPrompt from "../components/AICoachPrompt";
 import { checkCoachStatus } from "../lib/aiCoachData";
+import { unpackMacros } from "../components/OnboardingModal";
 
 export const monthAbbr = new Date()
   .toLocaleString("default", { month: "short" })
@@ -417,6 +418,8 @@ export default function Nutrition() {
   const [coachBannerDismissed, setCoachBannerDismissed] = useState(
     () => localStorage.getItem("rir0_coach_banner_dismissed") === "true",
   );
+  const [goalAchievedBanner, setGoalAchievedBanner] = useState(false);
+  const [activeGoalId, setActiveGoalId] = useState(null);
   const [aiCoachOpen, setAICoachOpen] = useState(false);
   const toastTimer = useRef(null);
   const menuRef = useRef(null);
@@ -635,39 +638,50 @@ export default function Nutrition() {
       }
       return;
     }
-    supabase
-      .from("nutrition_goals")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setGoals(data);
-      });
-  }, [user]);
-
-  // ── load macro preferences from DB
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("user_preferences")
-      .select("nutrition_visible_macros, preferred_weight_unit, preferred_height_unit")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data) return;
-        if (Array.isArray(data.nutrition_visible_macros)) {
-          setVisibleMacros(new Set(data.nutrition_visible_macros));
-          localStorage.setItem(
-            VISIBLE_KEY,
-            JSON.stringify(data.nutrition_visible_macros),
-          );
+    Promise.all([
+      supabase.from("nutrition_goals").select("macros, body_composition_goals, activity_level, experience_level").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_info").select("weight_kg, next_weigh_in_date, target_weight_kg, starting_weight_kg").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_preferences").select("nutrition_visible_macros, preferred_weight_unit, preferred_height_unit, weight_decimal_places, hide_weight_prompt, weigh_in_frequency").eq("user_id", user.id).maybeSingle(),
+      supabase.from("user_goals").select("id, is_active, target_weight_kg, starting_weight_kg").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
+      supabase.from("weight_logs").select("weight_kg").eq("user_id", user.id).order("date", { ascending: false }).limit(1).maybeSingle(),
+    ]).then(([{ data: ng }, { data: info }, { data: prefs }, { data: activeGoal }, { data: latestLog }]) => {
+      if (Array.isArray(prefs?.nutrition_visible_macros)) {
+        setVisibleMacros(new Set(prefs.nutrition_visible_macros));
+        localStorage.setItem(VISIBLE_KEY, JSON.stringify(prefs.nutrition_visible_macros));
+      }
+      setGoals((g) => ({
+        ...g,
+        ...unpackMacros(ng?.macros),
+        body_composition_goals: ng?.body_composition_goals ?? g.body_composition_goals,
+        activity_level: ng?.activity_level ?? g.activity_level,
+        experience_level: ng?.experience_level ?? g.experience_level,
+        weight_kg: info?.weight_kg ?? g.weight_kg,
+        next_weigh_in_date: info?.next_weigh_in_date ?? g.next_weigh_in_date,
+        target_weight_kg: activeGoal?.target_weight_kg ?? info?.target_weight_kg ?? g.target_weight_kg,
+        starting_weight_kg: activeGoal?.starting_weight_kg ?? info?.starting_weight_kg ?? g.starting_weight_kg,
+        preferred_weight_unit: prefs?.preferred_weight_unit ?? g.preferred_weight_unit,
+        preferred_height_unit: prefs?.preferred_height_unit ?? g.preferred_height_unit,
+        weight_decimal_places: prefs?.weight_decimal_places ?? g.weight_decimal_places,
+        hide_weight_prompt: prefs?.hide_weight_prompt ?? g.hide_weight_prompt,
+        weigh_in_frequency: prefs?.weigh_in_frequency ?? g.weigh_in_frequency,
+      }));
+      if (activeGoal?.id) {
+        setActiveGoalId(activeGoal.id);
+        const sessionKey = `rir0_goal_achieved_${activeGoal.id}`;
+        const currentKg = latestLog?.weight_kg ?? info?.weight_kg;
+        const targetKg = activeGoal.target_weight_kg ?? info?.target_weight_kg;
+        const startKg = activeGoal.starting_weight_kg;
+        if (
+          currentKg != null && targetKg != null && startKg != null &&
+          sessionStorage.getItem(sessionKey) !== "dismissed"
+        ) {
+          const goalMet =
+            (startKg > targetKg && currentKg <= targetKg) ||
+            (startKg < targetKg && currentKg >= targetKg);
+          if (goalMet) setGoalAchievedBanner(true);
         }
-        setGoals((g) => ({
-          ...g,
-          preferred_weight_unit: data.preferred_weight_unit ?? g.preferred_weight_unit,
-          preferred_height_unit: data.preferred_height_unit ?? g.preferred_height_unit,
-        }));
-      });
+      }
+    });
   }, [user]);
 
   // ── check AI coach eligibility
@@ -1340,14 +1354,7 @@ export default function Nutrition() {
           { onConflict: "user_id,date" },
         ),
       supabase.from("user_info").upsert(
-        { user_id: user.id, weight_kg: kg },
-        { onConflict: "user_id" },
-      ),
-      supabase.from("nutrition_goals").upsert(
-        {
-          user_id: user.id,
-          next_weigh_in_date: nextWeighInDate,
-        },
+        { user_id: user.id, weight_kg: kg, next_weigh_in_date: nextWeighInDate },
         { onConflict: "user_id" },
       ),
     ]);
@@ -2095,7 +2102,7 @@ export default function Nutrition() {
                   if (user) {
                     const nextDate = tomorrowStr();
                     await supabase
-                      .from("nutrition_goals")
+                      .from("user_info")
                       .upsert(
                         { user_id: user.id, next_weigh_in_date: nextDate },
                         { onConflict: "user_id" },
@@ -2119,7 +2126,7 @@ export default function Nutrition() {
                 onClick={async () => {
                   if (!user) return;
                   await supabase
-                    .from("nutrition_goals")
+                    .from("user_preferences")
                     .upsert(
                       { user_id: user.id, hide_weight_prompt: true },
                       { onConflict: "user_id" },
@@ -6366,6 +6373,44 @@ export default function Nutrition() {
         goals={goals}
         userId={user?.id}
       />
+
+      {/* Goal achieved banner */}
+      {goalAchievedBanner && (
+        <div style={{
+          position: "fixed",
+          bottom: isMobile ? 90 : 24,
+          left: isMobile ? "50%" : "auto",
+          right: isMobile ? "auto" : 24,
+          transform: isMobile ? "translateX(-50%)" : "none",
+          zIndex: 601,
+          background: "linear-gradient(135deg, #ff8c42, #ff6b1a)",
+          color: "#fff",
+          borderRadius: 14,
+          padding: "14px 18px",
+          boxShadow: "0 6px 24px rgba(255,140,66,0.4)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          maxWidth: 360,
+          width: "calc(100% - 32px)",
+        }}>
+          <span style={{ fontSize: 22, flexShrink: 0 }}>🎉</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>You've hit your goal weight!</div>
+            <div style={{ fontSize: 12, opacity: 0.9 }}>Head to your Profile to set a new goal and keep the momentum going.</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setGoalAchievedBanner(false);
+              if (activeGoalId) sessionStorage.setItem(`rir0_goal_achieved_${activeGoalId}`, "dismissed");
+            }}
+            style={{ background: "rgba(255,255,255,0.25)", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 13, padding: "4px 10px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Got it
+          </button>
+        </div>
+      )}
 
       {/* Logged toast */}
       <div
